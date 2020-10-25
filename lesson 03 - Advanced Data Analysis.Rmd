@@ -23,7 +23,7 @@ library(tidyverse)
 library(skimr)
 
 # Load employee_data
-employee_data <- read_rds(url('https://gmudatamining.com/data/employee_data.rds'))
+employee_data <- read_rds('./data/employee_data.rds')
 
 # View data
 employee_data

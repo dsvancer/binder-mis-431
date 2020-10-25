@@ -29,11 +29,11 @@ library(lubridate)
 ```
 
 ```{r}
-employee_data <- read_rds(url('https://gmudatamining.com/data/employee_data.rds'))
+employee_data <- read_rds('./data/employee_data.rds')
 ```
 
 ```{r}
-home_sales <- read_rds(url('https://gmudatamining.com/data/home_sales.rds'))
+home_sales <- read_rds('./data/home_sales.rds')
 ```
 
 ## Data
@@ -594,7 +594,7 @@ We will be using this data set to showcase the capability of `stringr` to proces
 
 
 ```{r}
-amazon_reviews <- read_rds(url('https://gmudatamining.com/data/amazon_shoe_reviews.rds'))
+amazon_reviews <- read_rds('./data/amazon_shoe_reviews.rds')
 
 amazon_reviews
 ```

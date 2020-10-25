@@ -22,7 +22,7 @@ The code below will load the `tidyverse` package and read the `heart_disease` da
 ```{r}
 library(tidyverse)
 
-heart_df <- read_rds(url('https://gmudatamining.com/data/heart_disease.rds'))
+heart_df <- read_rds('./data/heart_disease.rds')
 
 ```
 
