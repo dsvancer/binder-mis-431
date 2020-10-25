@@ -1,0 +1,7 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+mis431tutorials.Rcheck/
+mis431tutorials*.tar.gz
+mis431tutorials*.tgz

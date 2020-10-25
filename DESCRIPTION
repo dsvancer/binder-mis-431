@@ -7,7 +7,7 @@ License: What license is it under?
 LazyData: true
 Imports: 
     tidyverse, 
-    tidyverse, 
+    tidymodels, 
     discrim, 
     klaR, 
     skimr, 
