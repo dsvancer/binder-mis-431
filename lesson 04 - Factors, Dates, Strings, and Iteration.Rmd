@@ -1,0 +1,1217 @@
+---
+title: "Strings, Dates, Factors, and Iteration"
+author: "David Svancer"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE, 
+                      warning = FALSE,
+                      comment = "")
+```
+
+
+In this tutorial, we will cover the following topics:
+
+- Working with categorical data and factors using the `forcats` package
+- Creating and manipulating dates with the `lubridate` package
+- Manipulating text data with the `stringr` package
+- Making decisions in programming with the `if_else()` function
+- Iteration with the `purrr` package to apply functions to multiple elements of a list or data frame
+
+
+First let's load the `tidyverse` and `lubridate` packages as well as the `employee_data` and `home_sales` tibbles into our `R` environment.
+
+
+```{r}
+library(tidyverse)
+library(lubridate)
+```
+
+```{r}
+employee_data <- read_rds(url('https://gmudatamining.com/data/employee_data.rds'))
+```
+
+```{r}
+home_sales <- read_rds(url('https://gmudatamining.com/data/home_sales.rds'))
+```
+
+## Data
+
+We will be working with the `employee_data` data set, where each row represents an employee who either did or did not resign from a company as well as their attributes and work history, and the `home_sales` data, where each row represents a real estate home sale in the Seattle area between 2014 and 2015.
+
+Take a moment to explore these data sets below.
+
+### Employee Data
+
+```{r}
+employee_data
+```
+
+
+### Seattle Home Sales
+
+```{r}
+home_sales
+```
+
+# Categorical Data
+
+Categorical data, sometimes referred to as nominal data or ordinal data, represents data that only differs by label (such ‘yes’/‘no’) or ranks (such as ‘1st’, ‘2nd’, etc.).
+
+For example, the `department` variable in our `employee_data` is a categorical variable with the following levels: Marketing, Sales, Research, Product Development, IT and Analytics, and Finance and Operations.
+
+We have been introduced to factors in the first `R` tutorial. Factors are a special data structure that is designed to work with categorical data. 
+
+Instead of storing the levels of a categorical variable as text, factors map each level to a unique integer and save the associated labels. This allows for efficient computation since we are using less memory to store data.
+
+
+## Creating Factors
+
+Let's review how to create a factor vector. We can create a factor by passing a numeric or character vector to the `factor()` function. To assign an ordered label to each level of our data, we include the optional arguments, `levels` and `labels` inside of our `factor()` function.
+
+The example below creates a `weekday_factor` variable from a character vector of day abbreviations. 
+
+
+```{r}
+weekday_factor <- factor(c('M', 'T', 'W', 'Th', 'F', 'M', 'W'),
+                        levels = c('M', 'T', 'W', 'Th', 'F'), 
+                        labels =  c('Monday', 'Tuesday', 'Wednesday',
+                                    'Thursday', 'Friday'))
+```
+
+
+
+The ordering of the levels in our `weekday_factor` variable is determined from the `levels` order we entered when creating the factor.
+
+`R` functions that work with factors, such as `summary()`, will order their results based on the levels of a factor. For example, when we execute `summary(weekday_factor)` below, the `summary()` function tallies the number of each level that was observed in the factor vector. The results are displayed by the order of the factor levels by default.
+
+
+
+```{r}
+summary(weekday_factor)
+```
+
+
+## Reversing Levels
+
+What if we would like to reverse the order of the levels within a factor? One way would be to re-create the factor vector with the `factor()` function and the original input. However, this is very time consuming. 
+
+To quickly achieve this task, we can use the `fct_rev()` function from the `forcats` package. This function takes a factor vector as input and automatically reverses the order of the levels.
+
+Let's see how this works with the `weekday_factor` vector. 
+
+
+```{r}
+weekday_reversed <- fct_rev(weekday_factor)
+
+summary(weekday_reversed)
+```
+
+
+```{r}
+# Check level ordering
+levels(weekday_reversed)
+```
+
+Let's see an example of using this function within a `dplyr` analysis workflow. Will will create a new variable, `business_travel_rev` in the `employee_data` data frame that has the reverse ordering of the `business_travel` factor column. The reason we would want to do this may be for how the levels are displayed in a plot or as the results of the `count()` function.
+
+
+```{r}
+# Count factor values of business_travel
+employee_data %>% 
+  count(business_travel)
+```
+
+
+Next, we reverse the factor levels and the `count()` function displays the results with this new ordering. This will be important for when we learn how to plot data frames with `ggplot` in the coming lessons.
+
+
+```{r}
+employee_data %>% 
+  mutate(business_travel_rev = fct_rev(business_travel)) %>% 
+  count(business_travel_rev)
+```
+
+
+## Recoding Levels
+
+Another common task is to recode a given factor vector. The `fct_recode()` function is used for this task. This function takes a factor vector as input and then a sequence of assignments in the form `'new_label' = 'old_label'` separated by commas.
+
+Let's say that we wanted to recode our weekday factor and change `Monday` to `Here we go again` and `Friday` to `Party time`. The code below shows how to do this with `fct_recode()`.
+
+
+```{r}
+weekday_recode <- fct_recode(weekday_factor, 
+                             'Here we go again' = 'Monday', 
+                             'Party time' = 'Friday')
+
+summary(weekday_recode)
+```
+
+
+In the example below, we'll create a `job_level_new` column in the `employee_data` by recoding `job_level`.
+
+
+```{r}
+employee_data <- employee_data %>% 
+                 mutate(job_level_new = fct_recode(job_level,
+                                                   'Manager' = 'Manager',
+                                                   'Manager' = 'Senior Manager'))
+
+# View original level counts
+employee_data %>% count(job_level)
+```
+
+
+```{r}
+# Recoded factor level counts
+employee_data %>% count(job_level_new)
+```
+
+## Collapsing Levels
+
+Another type of transformation is collapsing multiple levels of a factor into a smaller subset of levels. This can be done with `fct_collapse()`.
+The syntax of `fct_collapse()` is similar to `fct_recode()` except the right side of the `=` can be a character vector of levels to collapse.
+
+The code below demonstrates this function on the `job_level` column from `employee_data`.
+
+
+```{r}
+employee_data %>% 
+  mutate(job_level_new = fct_collapse(job_level,
+                                      'Below Director' = c('Associate', 'Manager', 'Senior Manager'),
+                                      'Director or above' = c('Director', 'Vice President'))) %>% 
+  count(job_level_new)
+```
+
+
+## Combining Infrequent Levels
+
+An important transformation for machine learning is combining factor levels with low prevalence in a data set. Using infrequent factor levels to train machine learning algorithms can cause a phenomenon known as over-fitting, where the algorithm is memorizing the patterns in the data.
+
+The `fct_lump_n()` and `fct_lump_prop()` functions are used to combine infrequent levels into a single new category.
+
+`fct_lump_n()` lumps all levels except for the `n` most frequent (or least frequent if n < 0)
+
+`fct_lump_prop()` lumps levels that appear fewer than a specified proportion of times, `prop`
+
+The code below demonstrates both of these functions on the `business_travel` column of `employee_data`.
+
+
+```{r}
+# Original factor levels
+employee_data %>% count(job_level)
+```
+
+
+```{r}
+# Lump all levels except the top 3
+employee_data %>% 
+  mutate(job_level_lump_n = fct_lump_n(job_level, n = 3, 
+                                             other_level = 'other')) %>% 
+  count(job_level_lump_n)        
+```
+
+
+
+```{r}
+# Lump all levels below a proportion of 0.25 (25%)
+employee_data %>% 
+  mutate(job_level_lump_prop = fct_lump_prop(job_level, prop =  0.25,
+                                                   other_level = 'other')) %>% 
+  count(job_level_lump_prop)        
+```
+
+
+## Reordering Levels
+
+Many times we would like to reorder the levels of a factor based off the values of another variable in our data set. 
+
+Let's look at an example. The code below shows that the current levels of the `department` variable in `employee_data` are Marketing, Sales, Research, Product Development, IT and Analytics, and Finance and Operations.
+
+
+```{r}
+levels(employee_data$department)
+```
+
+
+What if we need to reorder the levels of `department` based on the median `salary` of each department?
+
+First, let's use `dplyr` to calculate the median `salary` by department and see what the new ordering of levels should be.
+
+
+```{r}
+employee_data %>% group_by(department) %>% 
+                  summarise(median_salary = median(salary)) %>% 
+                  arrange(median_salary)
+```
+
+
+Next, we could manually recode our `department` variable with this new ordering. However, `forcats` has a function to do this automatically for us.
+
+The `fct_reorder()` takes three important argument:
+
+
+
+- `.f` - a factor vector
+- `.y` - a numeric vector by which to order the levels of `.f.` (ascending order by default)
+- `.fun` - the summary function to apply to `.y` within each level of `.f` (`median` by default)
+
+
+The code below creates a new variable in `employee_data` which reorders the levels of `department` by the median `salary` values. The `count()` function automatically displays the levels of this new variable by the order we calculated manually in the previous example.
+
+
+```{r}
+employee_data %>% 
+  mutate(department_reorderd = fct_reorder(department,
+                                           salary)) %>% 
+  count(department_reorderd)
+```
+
+To order the levels in descending order, just pass `-salary` to the second argument of `fct_reorder()`.
+
+
+```{r}
+employee_data %>% 
+  mutate(department_reorderd_desc = fct_reorder(department, -salary)) %>% 
+  count(department_reorderd_desc)
+```
+
+
+We can also order the levels by a different summary function. This could be a custom function which we have written or another built-in summary function such as `sd()`.
+
+In the code below, we reorder the levels of `department` by the standard deviation of `salary` within each department.
+
+
+```{r}
+employee_data %>% 
+  mutate(department_reorderd_sd = fct_reorder(department, salary, sd)) %>% 
+  count(department_reorderd_sd)
+```
+
+# Test Your Knowledge
+
+As an exercise, use `dplyr` to calculate the standard deviation of `salary` by `department` in `employee_data`. Does the order in the `department_reordered_sd` variable from above match your results?
+
+```{r}
+
+```
+
+
+For more on working with factors in `R`, see [R for Data Science - Factors](https://r4ds.had.co.nz/factors.html)
+
+
+# Dates
+
+In this section we will cover the basics of working with dates in `R`. We will be using the `lubridate` package to create dates, extract components such as the year or month from a date, and basic date arithmetic.
+
+
+## Creating Dates
+
+Let's start with how to create a date value in `R`. We will be using the `as_date()` function from `lubridate` to achieve this. This function takes a character representation of a date and an optional `format` argument which is a character combination of the symbols below.
+
+`R` recognizes the following date format symbols. See the examples below of how to use these symbols when creating dates.
+
+
+
+
+| **Format Symbol** |               **Meaning**              |      **Example Values**     |
+|:-----------------:|:--------------------------------------:|:---------------------------:|
+|       %Y          |              4-digit year              |       1996, 2002, 2010      |
+|       %y          |              2-digit year              |          96, 02, 10         |
+|       %B          |           Unabbreviated month          |   January, April, October   |
+|       %b          |            Abbreviated month           |        Jan, Apr, Oct        |
+|       %m          | Numeric month (Can include starting 0) |   01 or 1, 03 or 3, 11, 12  |
+|       %A          |          Unabbreviated weekday         | Monday, Wednesday, Saturday |
+|       %a          |           Abbreviated weekday          |        Mon, Wed, Sat        |
+|       %d          |  Numeric day (Can include starting 0)  |   01 or 1, 09 or 9, 15, 30  |
+
+
+
+### Dates From Characters
+
+The format symbols from above can handle most use-cases of creating dates from character values. See the examples below.
+
+
+```{r}
+# Most common format
+as_date('2020-04-12', format = '%Y-%m-%d')
+```
+
+
+```{r}
+# With / instead of -
+as_date('2020/04/12', format = '%Y/%m/%d')
+```
+
+
+```{r}
+# Another common format
+as_date('Apr-12-20', format = '%b-%d-%y')
+```
+
+
+```{r}
+# Another common format
+as_date('Sunday, Apr 12 2020', format = '%A, %b %d %y')
+```
+
+
+The `as_date()` function will also work on a vector of character values.
+
+
+```{r}
+as_date(c('2020-Feb-15', '2020-Mar-11', '2018-Sep-14'),
+        format = '%Y-%b-%d')
+```
+
+
+
+The `as_date()` function is not able to handle all date formats, however. There is no `R` format symbol for days represented as 31st, for example. When we try to use `as_date()` on this type of input, we get an `NA` value.
+
+
+```{r}
+as_date('Apr 12th 2020', format = '%b-%d-%Y')
+```
+
+
+### Helper Functions
+
+The `lubridate` package has three useful helper function, `ymd()`, `mdy()`, and `dmy()`, for converting character or numeric values into dates. The `y`, `m` and `d` stand for year, month , and day respectively. These functions have built-in formatting checkpoints that intelligently convert most date formats correctly.
+
+See the examples below for how to use these functions for various inputs.
+
+
+
+The functions are very resilient to different formatting types, as long as the sequence of year, month, and day match. 
+
+In the code below, we first create a character vector, `chr_dates` with dates in different formats. All of the dates follow the y-m-d pattern, however. In this case, we can use the `ymd()` function.
+
+
+```{r}
+chr_dates <- c('2020-04-12', '2020-Jun-12', 
+               '2020-Apr-12th', '18-January-5th',
+               '2017/Apr/28')
+
+ymd(chr_dates)
+```
+
+
+Another example using `mdy()`.
+
+
+```{r}
+chr_dates_mdy <- c('April 12th 2017', 'Sep-05-2018', 'dec-23-2019')
+
+mdy(chr_dates_mdy)
+```
+
+
+### Handling Numeric Date Conversions
+
+Sometimes dates are stored as numbers which need to be converted to a date. The helper functions from `lubridate` can also handle these cases.
+
+
+```{r}
+numeric_dates <- c(20200218, 20180412, 20190705)
+
+ymd(numeric_dates)
+```
+
+
+
+We have a variable in our `home_sales` data frame, `selling_date`, which is a date stored as number. It follows the year-month-day pattern. Let's had a look at the first couple of values. Notice that `selling_date` has `dbl` data type
+
+
+```{r}
+home_sales %>% 
+  select(1:3) %>% 
+  slice(1:5)
+```
+
+
+Let's convert `selling_date` to a date variable. Notice that the updated `selling_date` column now has a `date` data type with standardized formatting.
+
+
+```{r}
+home_sales <- home_sales %>% 
+               mutate(selling_date = ymd(selling_date))
+
+home_sales
+```
+
+
+Common summary functions such as `min`, `median`, `max`, and `range` work with date inputs.
+
+
+```{r}
+home_sales %>% 
+  summarise(min_selling_date = min(selling_date),
+            median_selling_date = median(selling_date),
+            max_selling_date = max(selling_date))
+```
+
+
+## Extracting Date Components
+
+The `year()`, `month()`, and `day()` function can be used to extract components of a date variable.  
+
+These functions take a date variable as input and return the specified component as a number. 
+
+In the example below, we create three new variables in `home_sales`, `selling_month`, `selling_day`, and `selling_year` using these functions. 
+
+The code below also introduces the `relocate()` function from `dplyr` which allows use to reorder columns within a data frame. It has two optional arguments, `.before` or `.after` to determine where to place the specified columns.
+
+
+
+```{r}
+home_sales <- home_sales %>% 
+              mutate(selling_month = month(selling_date),
+                     selling_day = day(selling_date),
+                     selling_year = year(selling_date)) %>% 
+              relocate(selling_month, selling_day, selling_year, 
+                       .after = selling_date)
+
+# View results
+home_sales
+```
+
+
+
+## Date Arithmetic 
+
+Another common date operation is to calculate the difference between dates in various units, such as seconds, days, or years. `R` has a built-in function for this task, `difftime()`.
+
+This function takes the following arguments:
+
+
+
+- `time1` - a date or datetime value
+- `time2` - a date or datetime value
+- `tz` - an optional timezone
+- `units` - a character of either 'auto', 'secs', 'mins', 'hours', 'days', 'weeks'
+
+
+Unfortunately, `difftime` doesn't have a 'years` unit, but we can just divide the number of days by 365.25 to obtain this. 
+
+
+In the example below we have two date vectors, one with the birth dates of students and one with their registration dates for a class. 
+
+Our goal, is to calculate each student's age on their registration date.
+
+```{r}
+birth_dates <- ymd(c(19890528, 19960415, 20000815))
+
+registration_dates <- ymd(c(20180914, 20190505, 20200311))
+
+# View dates
+birth_dates
+
+registration_dates
+```
+
+
+We can pass our date vectors into the `difftime()` function. We select units of 'days' in this example. We get a numeric vector as output, which we store as `days_diff`. This vector is actually a *difftime* object with a special 'units' attribute. 
+
+
+```{r}
+days_diff <- difftime(registration_dates, birth_dates, units = 'days')
+
+str(days_diff)
+```
+
+
+When doing calculations with dates, I generally recommend converting difftime objects to numeric vectors with `as.numeric()`. This will drop any additional attributes and will make your results compatible with other `R` functions.
+
+```{r}
+# Calculate age
+
+age <- as.numeric(days_diff/365.25)
+
+age
+```
+
+
+To calculate a truncated age, you can use the `floor()` function which drops any decimals.
+
+
+```{r}
+floor(age)
+```
+
+
+
+The example shows how to do these steps with `%>%` operators.
+
+
+```{r}
+(difftime(registration_dates, birth_dates, units = 'days')/365.25) %>% 
+  as.numeric() %>% 
+  floor()
+```
+
+The example below shows how this can be done within a data frame using `dplyr`.
+
+
+```{r}
+my_df <- tibble(birth_date = ymd(c(19890528, 19960415, 20000815)),
+                registration_date = ymd(c(20180914, 20190505, 20200311)))
+
+my_df
+```
+
+
+
+```{r}
+my_df %>% 
+  mutate(age = (difftime(registration_date, birth_date, units = 'days')/365.25) %>%
+                as.numeric() %>% 
+                floor())
+```
+
+
+For more examples of working with dates, please see [R for Data Science - Dates](https://r4ds.had.co.nz/dates-and-times.html)
+
+
+
+# Text Data
+
+Data that is stored as raw text in character vectors is often referred to as **string** data. This type of data is becoming more prevalent as fields such as [Natural Language Processing](https://en.wikipedia.org/wiki/Natural_language_processing) and [Text Mining](https://en.wikipedia.org/wiki/Text_mining) have become more utilized in machine learning applications.  
+
+The `stringr` package from `tidyverse` contains numerous functions for creating, combining, counting, detecting, and replacing patterns within strings.
+
+In `R` text data is stored in character vectors. These can be created with either single quotes, such as `c('text example')`, or double quotes, `c("another text example")`
+
+
+
+## Amazon Shoe Reviews
+
+The code below imports a data frame that contains open-ended customer reviews of various shoes sold on Amazon. The `review` column contains the customer review for a particular product. 
+
+We will be using this data set to showcase the capability of `stringr` to process text data for insights.
+
+
+
+```{r}
+amazon_reviews <- read_rds(url('https://gmudatamining.com/data/amazon_shoe_reviews.rds'))
+
+amazon_reviews
+```
+
+
+## Combining Strings
+
+All string functions in `stringr` begin with `str_`. In this section we will use the `str_c()` function to combine the elements of different character vectors. 
+
+The `str_c()` function takes the following arguments:
+
+
+
+- a sequence of character vectors separated by commas (vectors do not have to be the same length)
+- `sep` - the character to separate elements after joining
+- `collapse` - the character to separate elements after collapsing
+
+
+First let's create three character vectors with the first, middle, and last names of individuals.
+
+
+
+```{r}
+first_name <- c('Lucie', 'Gregg', 'Alex', 'Heather')
+
+middle_initial <- c('A', 'D', 'J', 'K')
+
+last_name <- c('Smith', 'Stevens', 'Gonzalez', 'Chan')
+```
+
+
+
+### Collapsing Elements
+
+The `str_c()` function can be used to collapse the elements of a character vector into a single element. 
+
+To accomplish this, we pass a character vector into `str_c()` followed by the argument `collapse = your_separating_character`. 
+
+
+
+```{r}
+# Separate each name with a comma
+str_c(first_name, collapse = ', ')
+
+# Separate each name with a space
+str_c(first_name, collapse = ' ')
+```
+
+
+
+### Joining Character Elements
+
+We can also use `str_c()` to combine multiple character vectors of possibly different lengths.
+
+For example, suppose we would like to add 'First Name:' to the beginning of each name in the `first_name` vector. We simply add this string as the first argument to `str_c()`. In the example below, we also add a separating space.
+
+```{r}
+str_c('First Name:', first_name, sep = ' ')
+```
+
+
+
+We can also combine two or more vectors with the same number of elements.
+
+
+
+```{r}
+str_c(first_name, middle_initial, last_name, sep = ' ')
+```
+
+
+# Test Your Knowledge
+
+How would you adjust the code above to achieve the results below? **Hint**: you can use `str_c()` within the `str_c()` function.
+
+
+```{r echo = FALSE}
+str_c(first_name, str_c(middle_initial, ".", sep = ''), last_name, sep = ' ')
+```
+
+
+
+
+## Extracting Subsets
+
+The `str_sub()` can be used to extract a subset of characters from each element of a string. The `str_sub()` function takes a character vector as the first argument followed by the `start` and `end` positions. The `start` and `end` positions can be negative. A `-1` represents the last position, `-2` second to last and so forth.
+
+
+
+```{r}
+# First character from each first name
+str_sub(first_name, 1, 1)
+```
+
+
+
+```{r}
+# Second through fourth characters
+str_sub(first_name, 2, 4)
+```
+
+
+
+```{r}
+# Last two characters from each first name
+str_sub(first_name, -2, -1)
+```
+
+
+
+## String Length
+
+The `str_length()` function takes a character vector as an argument and returns the total number of characters within each element. The length calculation includes non-alpha numeric characters such as spaces (' '), commas (','), and other symbols.
+
+
+
+```{r}
+# Count the number of letters in each first name
+str_length(first_name)
+```
+
+
+This function is useful for selecting text by their length. For example, if we wanted to look at short reviews in our Amazon data, we could create a `review_length` column and `filter()` based on its values.
+
+```{r}
+amazon_reviews %>% 
+  mutate(review_length = str_length(review)) %>% 
+  select(review_id, review_length)
+```
+
+
+Let's look at reviews with less than 25 characters.
+
+
+
+```{r}
+amazon_reviews %>% 
+  mutate(review_length = str_length(review)) %>% 
+  filter(review_length < 25) %>% 
+  select(review_length, review)
+```
+
+
+
+
+
+## Counting Character Sequences
+
+The `str_count()` is useful for counting the occurrences of specific characters or sequences within a string. For example, we could use the `str_count()` function to count the number of times the letter "e" appears in each element of the `first_name` vector.
+
+The `str_count()` function takes a character vector as the first argument followed by a character sequence or regular expression (more on this in the next section).
+
+
+
+```{r}
+first_name 
+
+# Tally the number of 'e's in each name
+str_count(first_name, 'e')
+```
+
+
+
+Keep in mind that the character match is case-sensitive.
+
+
+
+```{r}
+# 'A' not included
+str_count(first_name, 'a')
+```
+
+
+
+To demonstrate the usefulness of this function, let's use it to answer the following question on our Amazon reviews data.
+
+How many reviews have at least two occurrences of the word 'great'?
+
+To answer this question, we will implement the following `dplyr` pipeline:
+
+- start with `amazon_reviews`
+- create a new column `great_count` which counts the occurrences of 'great' in each `review`
+- select the rows where `great_count` is greater than or equal to 2
+
+
+
+```{r}
+amazon_reviews %>% 
+  mutate(great_count = str_count(review, 'great')) %>% 
+  filter(great_count >= 2) %>% 
+  select(review)
+```
+
+
+
+## Detecting Patterns
+
+In text analytics, searching for patterns within raw character data is a common task. For example, what if we wanted to find all shoe reviews that contain the word 'awesome' and common variants.
+
+The language of pattern matching in strings is known as **regular expressions** or `regex` for short. In this section, we will go over the basics of pattern matching with `regex`.
+
+For students interested in text analytics, I highly recommended completing the [RegexOne Tutorial](https://regexone.com/). This a comprehensive introduction to regular expressions and can be completed in about an hour.
+
+
+
+As a motivating example, we can use regular expressions to find all mentions of `awesome` in the example below.
+
+The `str_view()` function can be used to test matches of regular expressions on a character vector.
+
+This function takes a charcater vector as the first argument and a regular expression as the second. A regular expression is nothing more than a sequence of characters and special symbols encolsed by double quotes (`"`).
+
+
+```{r}
+
+awesome_vector <- c('awesome shoes', 'Awesome price!', 
+                    'awweessooommeee!')
+
+# View regex matches
+str_view(awesome_vector, "[Aa]w*e*s*o*m*e*")
+```
+
+
+### Matching Exact Strings
+
+The simplest regex patterns are exact strings, such as words, phrases, or numbers. 
+
+To demonstrate these type of matches, let's create a vector with some reviews.
+
+
+```{r}
+example_reviews <- c('Amazing!', 'Grrrreeaatt fit', 
+                     'exelent product...great fit', 
+                     'excelent!!!','amazing shoes, small fit',
+                     'Perfect 10!', 'Amazing')
+
+example_reviews
+```
+
+
+Below are some examples of matching exact strings. By convention, all regular expression patterns are entered between double quotes. This makes it easier to search for single quotes (`'`) within strings.
+
+
+
+
+```{r}
+# Find all instances 'fit'
+str_view(example_reviews, "fit")
+
+```
+
+
+
+
+```{r}
+# Find all instances '10'
+str_view(example_reviews, "10")
+```
+
+
+
+### Any single character
+
+The `.` symbols is used to represent any character value. For example, `10.` will match the number 10 followed by any single character.
+
+
+```{r}
+# Find all instances of '10' followed by any single character
+str_view(example_reviews, "10.")
+```
+
+
+
+```{r}
+# Find all three character sequences with 'x' in the middle
+str_view(example_reviews, ".x.")
+```
+
+
+
+what if we need to match an actual period (`.`) in our text. To do so, we must escape the `.` symbol with a double backslash (`\\`). This tells our regex to match the character `.`
+
+
+```{r}
+# Find all three character sequences with 'x' in the middle
+str_view(example_reviews, "\\.")
+```
+
+
+### Optional Characters
+
+The `?` symbol allows us to optionally include the character to the left of the symbol. For example, `great!?` will match both `great` and `great!` since we have indicated that the `!` character is optional in our regex.
+
+As with the `.` symbol, to match a literal `?` in our text, must must escape it with a double backslash (`\\?`)
+
+
+```{r}
+# Find 'Amazing' with optional ! at the end
+str_view(example_reviews, "Amazing!?")
+```
+
+
+
+### Repetition
+
+The `*` and `+` symbols are used to match repetitions of a character.
+
+
+- `*` will match 0 or more instances of the character to its left
+- `+` will match 1 or more instances of the character to its left
+
+
+For example, the regex `a*b*` will match `aaaa`, `abbb`, `aaabbbbbbb`, `bbbb`. 
+
+However, `a+b+` will only match to `abbb` and `aaabbbbbbb`. 
+
+the difference is that `+` requires the character to be present in the string at least once.
+
+
+
+```{r}
+# Find multiple periods
+str_view(example_reviews, "\\.+")
+```
+
+
+
+```{r}
+# Find 'Great' with possible repeats
+str_view(example_reviews, "G+r+e+a+t+")
+```
+
+
+
+### Anchors
+
+By default, regular expressions will match any part of a string. Many times we need to match patterns at the beginning or end of a string. There are two regex symbols that we can use for this task:
+
+- `^` to match the start of a sequence of characters (placed to the left of the sequence)
+- `$` to match the end of of a sequence of characters (placed to the right of the sequence)
+
+
+
+```{r}
+# Reviews that start with 'A'
+str_view(example_reviews, "^A.*")
+```
+
+
+
+```{r}
+# Reviews that end with 'fit'
+str_view(example_reviews, "fit$")
+```
+
+
+
+### Character Classes
+
+If a group of characters are placed inside `[]`, then the regex will match any of those characters. For example, `[Aa]bc` will match either `Abc` or `abc`. 
+
+Any sequence placed inside `[]` is known as a character class. These can be created on the fly, but there are a number of predefined classes that are useful for matching common string patterns.
+
+
+ - `[\\d]` will match any digit
+ - `[a-zA-Z]` will match any letter
+ - `[a-zA-Z0-9]` will match any alpha-numeric character
+
+ 
+Let's find all digits in our example reviews. We will include a `+` after our character class to include multiples.
+
+
+```{r}
+# All non alpha-numeric symbols with repetition
+str_view(example_reviews, "[\\d]+")
+```
+
+
+Placing a `^` at the beginning of a character class will match to all characters except for the first instance of the sequence within the class.
+
+
+```{r}
+# Anything that is not a number
+str_view(example_reviews, "[^\\d]+")
+```
+
+
+
+### OR Operator
+
+The `|` symbol represents the logical OR operation within a regex. For example, `amazing|great` will match the string `amazing` or `great`.
+
+
+```{r}
+# Anything that is not a number
+str_view(example_reviews, "[Aa]mazing|[Gg]reat")
+```
+
+
+
+### Filtering a Data Frame with Regular Expressions
+
+The `str_detect()` function from `stringr` is used to detect the presence of regular expressions within a character vector. This function will return a sequence of `TRUE`/`FALSE` values as a results.
+
+For example, the code below checks for the presence of a digit within each element of `example_reviews`.
+
+
+```{r}
+example_reviews
+
+str_detect(example_reviews, "[\\d]")
+```
+
+
+A common data analysis task is to combine `str_detect()` within `filter()` to retrieve rows that match a certain regular expression pattern.
+
+In the example below, we select reviews  from our `amazon_reviews` data with less than 20 characters and at least one instance of the word 'great', with either a capital or lower case 'g' with possible repetition of letters.
+
+
+```{r}
+amazon_reviews %>% 
+  filter(str_length(review) < 20, str_detect(review, "[Gr]r+e+a+t+")) %>% 
+  select(review)
+```
+
+
+Regular expressions are extremely powerful and becoming an in-demand skill for analytics professionals. A great property of regular expressions is that they are fairly standardized across all programming languages.
+
+For those of you who would like to learn more, head over to the [RegexOne Tutorial](https://regexone.com/) and [R for Data Science - Strings](https://r4ds.had.co.nz/strings.html).
+
+
+# Iteration
+
+Iteration is the process of applying a function to multiple elements of a collection. A collection could be the elements of a list or the columns of a data frame.
+
+Iteration is so common in data analysis that the `tidyverse` package contains a specialized package, `purrr`, built specifically to make these operations easier. 
+
+
+
+
+## The `map()` Functions
+
+The `map()` function within the `purrr` package can be used to execute FOR loops in an elegant way. The `map()` function always returns a list of results. If the iteration results in a vector, you can control the type of vector output with `map_dbl()`, `map_chr()`, `map_int()`, and `map_lgl()`. However, if the results of the function call do not match the map_*type* call, `purrr` will give an error.
+
+
+
+The important arguments to this function are:
+
+- `.x` - an `R` object which we wish to iterate over. Can be a vector, list, or data frame
+
+- `.f` - the function to apply to each element of `.x`. Can be a named function (such as `mean`) or user defined
+
+
+
+### Iterating Over a Vector
+
+In the example below, we will apply the `ceiling()` function (which rounds up to the nearest integer) to all elements of `num_vector`
+
+
+```{r}
+
+num_vector <- c(2.34, 5.45, 6.75)
+
+```
+
+
+```{r}
+# Map the ceiling() function to each element of num_vector
+# The map() function always returns a list
+map(.x = num_vector, .f = ceiling)
+
+```
+
+
+
+
+```{r}
+# Store results in a numeric vector instead of the default list
+# .x and .f do not have to be named explicitly
+map_dbl(num_vector, ceiling)
+
+```
+
+
+
+
+### Iterating Over a List
+
+The example below applies the `max()` function to each element of `my_list`.
+
+
+```{r}
+
+my_list <- list(vec_1 = c(1, 4, 6), 
+                vec_2 = c(3, 1), 
+                vec_3 = c(1, 10, 9, 8))
+```
+
+
+
+```{r}
+max_values <- map_dbl(my_list, max)
+
+```
+
+
+
+```{r}
+# View results - a named numeric vector
+max_values
+
+```
+
+
+
+
+### Iterating Over a Data Frame
+
+The `map()` functions can also be used to iterate over columns of a data frame. 
+
+The example below creates a named character vector that contains the class of each column in the `iris` dataset. The `class` function is applied to each column and returns the data type of the column values.
+
+
+```{r}
+iris_col_types <- map_chr(iris, class)
+
+```
+
+
+
+```{r}
+# View results
+iris_col_types
+
+```
+
+
+
+It is also possible to write custom functions within a call to the `map()` functions. Below are two examples of applying a custom function to the numeric columns of the `iris` data frame.
+
+
+
+```{r}
+# Function that subtracts the median of a vector from all 
+# elements and finds the maximum value
+max_median_dev <- function(x) {
+                 max(x - median(x))
+}
+
+```
+
+
+
+```{r}
+# Apply this function to first 4 columns of iris
+# Store output as a numeric vector
+map_dbl(iris[ , 1:4], max_median_dev)
+
+```
+
+
+
+
+An equivalent way of achieving this would be with the following syntax within the argument to `.f`. We can use `.x` to represent the variable of iteration and write custom functions directly within the input to `.f`
+
+function(x) { x - mean(x) } is the same as `~ .x - mean(.x)`
+
+
+```{r}
+
+map_dbl(iris[ , 1:4], ~ max(.x - median(.x)))
+
+```
+
+
+
+# Test Your Knowledge
+
+Fill in the code below and use the `map_dbl()` function to create a numeric vector that contains the column averages of all the variables in the built-in data frame, `mtcars`.
+
+
+```{r}
+# View first couple of rows of mtcars
+head(mtcars)
+
+```
+
+
+
+```{r}
+# Use map_dbl to create a vector of average values
+mtcars_col_avg <- map_dbl(mtcars, .f = )
+```
+
+
+### Additional Arguments to Functions
+
+It is also possible to pass additional arguments to functions within `map()`. For example, the `rnorm()` function generates random observations from a normal distribution. Its first, second, and third arguments are `n` (number of observations to generate), `mean` (mean of the particular normal distribution), and `sd` (standard deviation of the particular normal distribution.
+
+
+```{r}
+# Generate 4 observations from Normal with mean = 3, sd = 4
+rnorm(4, mean = 3, sd = 4)
+
+```
+
+
+Let's use `map()` to generate observations of normal distributions with mean = 4 and sd = 6 for various values of `n`, which we store in a vector. The additional parameters are passed to the end of the `map()` function.
+
+
+
+```{r}
+sample_sizes <- c(2, 4, 5)
+
+```
+
+
+```{r}
+# Sample from Normal distribution for n values in sample_sizes
+map(sample_sizes, rnorm, mean = 4, sd = 6)
+```

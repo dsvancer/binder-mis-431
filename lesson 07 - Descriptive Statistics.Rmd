@@ -1,0 +1,520 @@
+---
+title: "Descriptive Statistics with R"
+author:"David Svancer"
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE, 
+                      warning = FALSE,
+                      comment = "")
+options(scipen=999)
+
+```
+
+
+This tutorial will focus on exploratory data analysis with `R`. We will introduce new functions that automatically summarize various combinations of data types. These functions can be viewed as helpers/extensions of `dyplr` and `ggplot2` that automate some portions of the data analysis process.
+
+
+The `R` code below will import the employee attrition and Seattle home sales data sets. It also loads a number of new `R` packages.
+
+
+[janitor](https://cran.r-project.org/web/packages/janitor/vignettes/janitor.html) - useful for common data cleaning and exploration tasks including cross tabulation tables
+
+[funModeling](http://pablo14.github.io/funModeling/) - a set of functions for automatic plotting and descriptive statistics
+
+[corrr](https://corrr.tidymodels.org/) - functions for creating and exploring correlations
+
+[corrplot](https://cran.r-project.org/web/packages/corrplot/vignettes/corrplot-intro.html) - tools for visualizing correlations between sets of numeric variables
+
+
+
+```{r, message = FALSE, warning = FALSE}
+# Load packages
+library(funModeling)
+library(skimr)
+library(janitor)
+library(corrr)
+library(corrplot)
+library(tidyverse)
+```
+
+
+```{r}
+# Employee attrition data
+employee_data <- read_rds(url('https://gmudatamining.com/data/employee_data.rds'))
+```
+
+
+```{r}
+# Seattle home sales data
+home_sales <- read_rds(url('https://gmudatamining.com/data/home_sales.rds')) %>% 
+              select(-selling_date)
+```
+
+
+# Data
+
+We will be working with the `employee_data` and `home_sales` data frames in this lesson.
+
+Take a moment to explore these data sets below.
+
+
+## Employee Attrition Data
+
+The data consists of 1,470 employee records for a U.S. based product company. The rows in this data frame represent an employee at this company that either left the company or not (`left_company`) and their associated characteristics.
+
+
+```{r}
+employee_data
+```
+
+
+## Seattle Home Sales
+
+
+A row in this data frame represents a home that was sold in the Seattle area between 2014 and 2015. 
+
+The response variable in this data is `selling_price`. 
+
+
+```{r}
+home_sales
+```
+
+
+
+# First Step in Data Analysis
+
+## Number of Observations, Missing Values, and Summary Statistics
+
+The first step in a data analysis project is to explore your data source. This includes summarizing the values within each column, checking for missing data, checking the data types of each column, and verifying the number of rows and columns. 
+
+The `skim()` function was introduced in [tutorial 2](https://www.gmudatamining.com/lesson-02-r-tutorial.html#Employee_Attrition_Data) and can be used to accomplish these tasks. 
+
+The `skim()` function takes a data frame or tibble as an argument and produces a detailed set of summary statistics including:
+
+- the number of rows and columns in the data frame
+- the number of missing values per column, counts of unique values, and other numeric summary statistics grouped by column type
+
+
+We see from the results below that `employee_data` has 1,470 rows, 13 columns, 7 factor columns, 6 numeric columns, and no missing values (`n_missing`) across all columns of the data frame.
+
+
+```{r}
+# View data frame properties and summary statistics
+skim(employee_data)
+```
+
+
+# Exploring Categorical Variables
+
+Categorical variables are either nominal or ordinal with respect to measurement scale. Therefore the most common summary statistics include frequency counts and proportions.
+
+
+## Skimming by Variable Type
+
+The `skim()` function is a good first step for analyzing character or factor variables. Each time the `skim()` function is run, it produces a data frame as the output. 
+
+When we print this data frame to the console, it has the nice printing properties seen in the previous section. One of the columns in the output data frame is named `skim_type` and records the variable type for a particular column. 
+
+We can use this column in combination with the `filter()` function to subset the output based on variable type.
+
+For example, the code below will display only the categorical variables in the `employee_data` data frame. Since categorical data can be stored as factors or character columns within a data frame, we must add both to our filter condition.
+
+The `n_unique` and `top_counts` fields in the output below gives the number of unique values and most frequent (abbreviated) values within each column.
+
+
+```{r}
+skim(employee_data) %>% 
+  filter(skim_type %in% c('factor', 'character'))
+```
+
+
+## Crosstabs
+
+Crosstabs (also called contingency tables) are used to summarize the the frequency counts in categorical variables. The `tabyl()` function from the `janitor` package can be used to create crosstabs in `R`.
+
+
+### Single Variables
+
+The `tabyl()` function from the `janitor` package is useful for creating tables of count values for distinct levels of factor or character variables. The `tabyl()` function takes a data frame as the first argument followed by one or two variables of interest.
+
+The `tabyl()` function includes a number of `adorn()` functions which do things like add row and column totals and percentages. These are demonstrated in the `R` code below. 
+
+The results of either a `tably()` or `adorn()` function will be a data frame.
+
+To explore the full set of features provided by this function, refer to the following website:
+
+[tabyl tutorial](https://cran.r-project.org/web/packages/janitor/vignettes/tabyls.html
+
+
+We can summarize the frequency counts of a single variable by passing a data frame and the column of interest into `tabyl()`. By default, we obtain the counts, `n`, and proportions, `percent`, of the levels of a categorical column.
+
+
+```{r}
+# Summarize a single categorical variable
+tabyl(employee_data, department)
+
+```
+
+
+Since the output of `tably()` is a data frame, we can use `dplyr` functions such as `filter()` to subset the results.
+
+
+```{r}
+tabyl(employee_data, department) %>% 
+  filter(percent >= 0.17)
+```
+
+
+The function `adorn_totals()` can be used to add column totals. To accomplish this, we add `'row'` as a parameter to `adorn_totals()`. This is a bit confusing, since to get column totals we need to input `'row'`. This argument instructs `adorn_totals()` to place the sum of values in the rows below the table.
+
+
+```{r}
+# Add column total in the last row
+tabyl(employee_data, department) %>% adorn_totals('row')
+
+```
+
+
+### Two Variables
+
+The power of the `tabyl()` function rests in its ability to produces formatted two-way crosstabs that display counts and percentages for the interaction of two categorical variables.
+
+To produce a two-way crosstab, just pass the two columns of interest into the `tabyl()` function.
+
+
+```{r}
+
+tabyl(employee_data, left_company, business_travel)
+
+```
+
+
+#### Table With Row Percentages
+
+In the example below, additional `adorn()` functions are used to add useful summary statistics to the simple table from above. We add both column and row totals with the `adorn_totals()` function, row percentages with the `adorn_percentages()` function, remove decimals from our row percentages with `adorn_pct_formatting()` function, combine counts with our percentage values in each cell with the `adorn_ns()` function, and add a combined title in the first column with `adorn_title()`.
+
+With row percentages, we are exploring the distribution of `business_travel` within each category of `left_company`. For example, we see that of the employees who left the company, 29% traveled frequently for business.
+
+
+```{r}
+
+tabyl(employee_data, left_company, business_travel) %>%
+  adorn_totals(c('row', 'col')) %>%
+  adorn_percentages('row') %>% 
+  adorn_pct_formatting(digits = 0) %>%
+  adorn_ns() %>%
+  adorn_title('combined')
+
+```
+
+
+#### Table With Column Percentages
+
+To explore columns percentages, we simply replace `row` with `col` in our `adorn_percentages()` functions. In this case, we are studying the distribution of `left_company` values within each category of `business_travel`.
+
+
+```{r}
+
+tabyl(employee_data, left_company, business_travel) %>%
+  adorn_totals(c('row', 'col')) %>%
+  adorn_percentages('col') %>% 
+  adorn_pct_formatting(digits = 0) %>%
+  adorn_ns() %>%
+  adorn_title('combined')
+
+```
+
+
+## Visualizing Categorical Variables
+
+The most common visualization for categorical data are bar and column charts that plot the frequency of distinct values within a variable.
+
+
+### Automatic Plotting
+
+The `freq()` function from the `funModeling` package can be used to automatically create bar and column charts for the factor or character variables within a data frame. The `freq()` function takes a data frame as the first argument and produces frequency plots and tables of **all** factor/character variables.
+
+This function is meant to interactively explore data, not for saving the results. To save the results, we would have to use the `tabyl()` and `ggplot()` functions to create custom tables and plots.
+
+
+```{r message = FALSE}
+
+freq(employee_data)
+
+```
+
+
+
+# Exploring Numeric Variables
+
+To calculate numerical summaries, including averages, standard deviations, and percentiles for numeric variables, we can use the `skim()` function.
+
+
+## Descriptive Statistics
+
+The `skim()` function will automatically calculate all key descriptive statistics for the numeric variables in our data. In the example below, we use the `skim()` function on the `home_sales` data and select the numeric columns printing.
+
+In the output under the `Variable type: numeric` section, we obtain a complete summary of our numeric variables. Calculated statistics include:
+
+
+- the mean and standard deviation
+- a five number summary (minimum (`p0`), 25<sup>th</sup>, 50<sup>th</sup>, and 75<sup>th</sup> percentiles, and the maximum (`p100`))
+- histogram plots
+
+
+From the output below, we are able to say the following about the `selling_price` variable:
+
+
+- the average selling price of homes is \$516,613.50 with a standard deviation of \$182,978.15
+- the median selling price of homes is \$479,950
+- the range of selling prices is between \$260,000 and \$970,000
+- the [interquartile range](https://en.wikipedia.org/wiki/Interquartile_range) is \$288,500
+- the distribution of selling prices is skewwed to the right based on the histogram. This means the values tend to cluster more towards lower selling prices
+
+
+```{r}
+skim(home_sales) %>% 
+  filter(skim_type == 'numeric')
+```
+
+
+### Automatic Plotting
+
+Another useful function in the `funModeling` package is `plot_num()` which takes a data frame and automatically plots histograms of numeric variables
+
+
+```{r fig.width = 8, fig.height=7}
+plot_num(home_sales)
+
+```
+
+
+## Correlation Analysis
+
+Studying the correlation structure of a numeric data set is important for uncovering linear associations between variables. 
+
+The [correlation coefficient](https://en.wikipedia.org/wiki/Pearson_correlation_coefficient) is a measure of the linear relationship between two numeric variables and ranges from -1 to 1. A value of  -1 indicates an inverse linear relationship, where the values of one variable **decrease** linearly as the values of another increase. 
+
+A value of 1 indicates a positive linear relationships where the values of one variable **increase** linearly as the values of another increase.
+
+A correlation of 0 indicates that there is no linear relationship between two numeric variables. However, this does not mean that two variables are not associated with each other. Variables many have non-linear relationships despite having correlations of 0.
+
+
+### Creating Correlation Data Frames
+
+A correlation data frame can be produced by passing a data frame **of numeric variables** to the `correlate()` function from the `corrr` package. Correlation data frames contain the correlation coefficients for every pair of numeric variables in a data frame. 
+
+If you have non-numeric data, make sure to filter your data frame to remove these columns. We will demonstrate creating correlation data frames using the `home_sales` data. 
+
+The `select()` function from `dplyr` can conditionally select columns by their data type properties. This is done by passing one of the following function names into the `where()` function within `select()`:
+
+- is.numeric
+- is.factor
+- is.character
+
+The example below will select only numeric columns from `home_sales`. This is what we need to pass into the `correlate()` function to calculate a correlation data frame.
+
+
+```{r}
+home_sales %>% select(where(is.numeric))
+```
+
+
+Now we can pass the data from above into the `correlate()` function and have a look at the results. The `correlate()` function creates a tibble with all pairwise correlation coefficients for variables in the input.
+
+The first column of the output is `rowname` and stores the names of the variables in the input data. The remaining columns are the names of the variables in the input data in the same order as they appear in `rowname`. Each cell in this data frame is the correlation between the corresponding pair of variables.
+
+By default, the diagonal is set to `NA` since all values would be equal to 1 (the correlation of a variable with itself is always 1).
+
+To set the diagonal values to 1, just add `diagnoal = 1` into the `correlate()` function. This will be helpful for when we need to plot a correlation data frame, but is not necessary for exploring correlation data frames.
+
+Interpreting the output below is a bit challenging. We have lots of correlations to look at and they are not sorted in any particular order to reveal strong relationships. The `corrr` package has a number of functions to make exploring this data easier.
+
+```{r}
+home_sales %>% 
+  select(where(is.numeric)) %>% 
+  correlate()
+```
+
+ 
+### Focusing on Variables
+ 
+The `focus()` function takes a correlation data frame as the first argument and selects a subset of variables on which to focus. For example, if we where interested in looking at the correlations between `selling_price` and all other numeric variables, we would pass `selling_price` into `focus()`.
+
+
+Let's see an example. First we save the correlation data frame from above and name it `home_correlations`. 
+```{r}
+# Save correlation data frame
+home_correlations <- home_sales %>% 
+                     select(where(is.numeric)) %>% 
+                     correlate()
+```
+
+
+Next, we pass `home_correlations` into the `focus()` function and selecting the `selling_price` column.
+
+
+```{r}
+# Focus on selling_price
+home_correlations %>% 
+  focus(selling_price)
+```
+
+
+Since all functions from the `corrr` package return a data frame as output, we can use `dplyr` functions on the results. Let's arrange the `selling_price` correlations in descending order to see which variables have the strongest relationships with `selling_price`.
+
+
+```{r}
+home_correlations %>% 
+  focus(selling_price) %>% 
+  arrange(desc(selling_price))
+```
+
+
+We can also select multiple columns within the `focus()` function. Based on the correlation values below, some interesting findings are:
+
+
+- the greater the square footage of a home, the greater the selling price (0.62 correlation)
+- homes with more bedrooms and bathrooms are associated with larger selling prices (0.26 and 0.36 correlations)
+- older homes tend to have fewer floors (-0.36 correlation)
+
+
+```{r}
+home_correlations %>% 
+  focus(selling_price, house_age)
+```
+
+
+### Rearranging Correlation Data Frames
+
+The `focus()` function is helpful when we have a small number of variables to explore. The `rearrange()` function will order the rows and columns in a correlation data frame by their magnitudes and grouping characteristics (if any exist). This is done with an algorithm known as principal components analysis which we will learn about in lesson 14.
+
+To reorder our `home_correlations` data frame, we just pass it into the `rearrange()` function.
+
+Notice in the output, that we seem to have a group of variables that are highly related to each other. We see that `sqft_living`, `bathrooms`, `bedrooms`, and `selling_price` form a group of columns that are strongly correlated with each other. Intuitively, this makes sense for this data set. The more square footage, the more bedrooms and bathrooms, which lead to larger selling prices on average. 
+
+If correlated groups of variables exist in a correlation data frame, `rearrange()` will uncover them.
+
+```{r}
+home_correlations %>% 
+  rearrange()
+```
+
+
+### Stretching Correlation Data Frames
+
+Correlation data frames are not in the [optimal format for data analysis](https://www.gmudatamining.com/lesson-03-lecture.html), where we have observations in rows and variables in columns.
+
+To create a structured version of our correlation data, which we can pass to `ggplot` or `dplyr` for further data analysis, we can use the `stretch()` function.
+
+The `stretch()` function takes a correlation data frame as the first argument in addition to the optional parameters `na.rm` and `remove.dups`. It's best to set both of these to TRUE. `na.rm = TRUE` will remove the diagonal entries while `remove.dups = TRUE` will remove duplicate correlation values such as [`x` = `selling_price`, `y` = `house_age`] and [`x` = `house_age`, `y` = `selling_price`] which will have the same correlation value.
+
+The results of `stretch()` will be a data frame with three columns, `x`, `y`, and `r`. The `x` and `y` columns store the values of the variables in a particular pair from our correlation data, while the `r` column contains the correlation values.
+
+
+```{r}
+home_correlations %>% 
+  stretch(na.rm = TRUE, remove.dups = TRUE)
+```
+
+The results from `stretch()` are compatible with `ggplot`. For example, we can make a histogram of the correlation values observed for all unique pairs of variables in `home_sales` with the code below.
+
+First we create the results with `stretch()` and then we pipe this to the first argument of `ggplot()` after which we build our histogram.
+
+
+```{r}
+home_correlations %>% 
+  stretch(na.rm = TRUE, remove.dups = TRUE) %>% 
+  ggplot(mapping = aes(x = r)) +
+  geom_histogram(fill = '#006EA1', color = 'white', bins = 15) +
+  labs(title = 'Home Sales Correlation Values',
+       x = 'Correlation Value',
+       y = 'Count')
+```
+
+
+### Visualizing Correlations
+
+The `corrplot` packages provides several great functions for visualizing a correlation data frame. 
+
+The `corrplot()` function takes a correlation matrix and produces a visualization of the correlation structure. By default, various colored circles are used to represent the magnitude of pairwise correlation coefficients.
+
+The `corrplot()` functions takes a **matrix** of correlation values as its first argument. For this function to work properly, we must use the base `R` function `cor()` to create our correlation matrix.
+
+In the code below, we create `home_cor_mat` by passing the numeric columns of our `home_sales` data into the `cor()` function. This will create a matrix of correlation values, not a data frame.
+
+
+```{r}
+home_cor_matrix <- home_sales %>% 
+                   select(where(is.numeric)) %>% 
+                   cor()
+
+home_cor_matrix
+```
+
+
+```{r fig.height=9, fig.width=10}
+# Plot the matrix as a heat map
+corrplot(home_cor_matrix)
+
+```
+
+
+It is better to plot correlation matrices with the following additional parameters. The most important one being , `order = 'FPC'`. 
+
+This arranges the correlation matrix by the loadings on the first principal component from a principal components analysis (PCA). Intuitively, it orders the variables by the underlying variable group dynamics based on the correlation structure in the data. This will create the same groups of variables as we got with the `rearrange()` function in the previous section.
+
+
+```{r fig.height=9, fig.width=10}
+# Additional options
+corrplot(home_cor_matrix, 
+         method = "ellipse", # ellipses instead of circles
+         type = "upper", # keep upper half only
+         order = "FPC", # order by loadings on FPC
+         tl.col = "black") # color of variable text lables
+
+```
+
+
+If it is desired to include the correlation coefficient values in the visualization, then we can use the `corrplot.mixed()` function.
+
+
+```{r fig.height=10, fig.width=10}
+
+corrplot.mixed(home_cor_matrix, 
+               upper = "ellipse", # ellipses in upper half 
+               order = "FPC", # order by loadings on FPC
+               tl.col = "black",
+               tl.cex = 0.75) # color of variable text lables
+
+```
+
+
+# Numeric and Categorical Variables
+
+In data analysis, it is also important to study the relationships between combinations of numeric and categorical variables. A common approach for exploring the relationship between categorical and numeric variables is by creating summary tables.
+
+For each unique value of a categorical variable, descriptive statistics such as the mean and standard deviation, are calculated for the associated values in a numeric variable. Frequency counts for each category are commonly included as well.
+
+This type of analysis can easily be done with `dplyr`, but `skim()` has the capability to summarize `grouped data frames`, making the task much easier.
+
+Let's return to our `employee_data` data frame. Suppose we are interested in studying the relationship between `left_company` and all other numeric variables in the data. For each value of `left_company`, we need to explore the associated summary statistics of the numeric columns in our data.
+
+To do this with `skim()`, just pass the `employee_data` grouped by `left_company` as the first argument to the function.
+
+In the code below, we group `employee_data` by `left_company`, pass this to `skim()`, and filter for numeric variables in the output. This will create summary statistics of each numeric variable by the values of the `left_company` variable.
+
+For example, when studying the relationship between `left_company` and `salary`, we see that employees who left the company have a median salary of \$70,106 compared to \$90,859 for employees who did not.
+
+
+```{r}
+employee_data %>% 
+  group_by(left_company) %>% 
+  skim() %>% 
+  filter(skim_type == 'numeric')
+```
+

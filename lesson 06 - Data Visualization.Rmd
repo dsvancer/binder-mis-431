@@ -1,0 +1,666 @@
+---
+title: "Data Visualization"
+author: "David Svancer"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE, 
+                      warning = FALSE,
+                      comment = "")
+```
+
+
+In this tutorial, we will learn about data visualization with `ggplot2`. 
+
+
+We will be working with the `heart_disease` data set, where each row represents a patient from a cardiology department of a hospital and their associated medical test results.
+
+The code below will load the `tidyverse` package and read the `heart_disease` data into our `R` session.
+
+
+```{r}
+library(tidyverse)
+
+heart_df <- read_rds(url('https://gmudatamining.com/data/heart_disease.rds'))
+
+```
+
+
+# Data
+
+Take a moment to explore the data below.
+
+
+## Heart Disease Data
+
+```{r}
+heart_df
+```
+
+
+# Data Visualization
+
+This section will cover the basics of data visualization with `ggplot2`. Most of the data visualizations that you will be required to produce follow the same general template, displayed below. 
+
+To create different types of graphics with `ggplot2`, such as scatter plots or bar graphs, you will only need to adjust the input in brackets with the appropriate input or functions.
+
+`ggplot2` makes use of the `+` operator. This is **not** the addition operator that is used in base `R`. 
+
+Since `ggplot2` was created before `dplyr`, the `+` operator was used instead of the `%>%` operator, but within `ggplot2`, the `+` operator functions the same way as `%>%` functions in `dplyr`. 
+
+
+```{r eval = FALSE}
+
+ggplot(data = [DATA], mapping = aes([MAPPING]) +
+         [GEOM_FUNCTION]() +
+         [FACET_FUNCTION]() +
+         [COORDINATE_FUNCTION]() +
+         labs(title = [TITLE],
+              x = [X AXIS LABEL],
+              y = [Y AXIS LABEL])
+       
+```
+
+
+We will be creating data visualizations using the `heart_df` data frame. Each row in this data frame represents a patient and their outcomes on medical tests. Each patient eventually did or did not develop heart disease. This is captured by the `heart_disease` variable.
+
+
+## Scatter Plots
+
+### Simple Scatter Plot
+
+I will introduce each bracketed parameter in the template above by building a series of scatter plots that adds on each layer. We will be using the Heart Disease data set.
+
+The code below produces a simple scatter plot. The data parameter in `ggplot()` takes the data frame that contains your data. The `aes()` option in the mapping parameter stands for aesthetic mapping. 
+
+Below we are telling `ggplot()` to map the `age` column values in `heart_df` to the x-axis and the `cholesterol` column values to the y-axis. This produces (x,y) pairs that are mapped to coordinates on the graph.
+
+Finally, we add the `geom_point()` function which tells `ggplot` that you would like points to be displayed on the coordinate mappings you have created.
+
+
+```{r}
+
+ggplot(data = heart_df, mapping = aes(x = age, y = cholesterol)) +
+       geom_point()
+
+```
+
+All `geom` functions take optional aesthetic values. These include, `color`, `size`, and `alpha` (to control opacity). When these parameters are placed within a `geom` function and outside of the `aes` argument, they are applied to **all points**. You can specify the name of a color in `R` such as "orange" or by supplying a HEX code as I did below.
+
+Below, I am styling the points to have size 2, a blue color using the HEX code #006EA1, and 45% opacity.
+
+
+```{r}
+
+ggplot(data = heart_df, mapping = aes(x = age, y = cholesterol)) +
+       geom_point(color = "#006EA1", size = 2, alpha = 0.45)
+
+```
+
+
+### Adding a Third Variable With `aes()`
+
+Now we want to visualize the scatter plot by groups, those with heart disease and those without. 
+
+We can color the points by the value of the `heart_disease` variable as follows. Add `color = heart_disease` inside of the `aes` function within the mapping. This adds to the original mapping that we provided to `ggplot()`. 
+
+Now we have mapped each point to three attributes (`age`, `cholesterol`, color based on `heart_disease` value).
+
+
+```{r}
+
+ggplot(data = heart_df, mapping = aes(x = age, y = cholesterol, color = heart_disease)) +
+       geom_point()
+
+```
+
+
+### Adding a Third Variable by Facet
+
+We can also visualize a third variable by adding the `facet_wrap()` function. 
+
+This function separates the scatter plot based on the value of `heart_disease`.  
+
+The general syntax is `facet_wrap( ~ Your_facet_variable, nrow = rows_you_would_like)`.
+
+
+```{r}
+
+ggplot(data = heart_df, mapping = aes(x = age, y = cholesterol)) +
+       geom_point() +
+       facet_wrap(~ heart_disease, nrow = 2)
+
+```
+
+
+If you would like to keep the `heart_disease` values as different colors, just add `color = heart_disease` into `aes`. 
+
+Below I demonstrate what changing the `nrow` option will do to your plot.
+
+
+```{r}
+
+ggplot(data = heart_df, mapping = aes(x = age, y = cholesterol, color = heart_disease)) +
+      geom_point() +
+      facet_wrap(~ heart_disease, nrow = 1)
+
+```
+
+
+### Adding a Fourth Variable by Facet
+
+We can visualize the scatter plot by combinations of character or factor variables. If you are faceting by more than one variable, use the `facet_grid()` function. 
+
+The general syntax for `facet_grid()` is `facet_grid(Vertical_variable ~ Horizontal_variable)`
+
+
+```{r}
+
+ggplot(data = heart_df, mapping = aes(x = age, y = cholesterol, color = heart_disease)) +
+       geom_point() +
+       facet_grid(heart_disease ~ fasting_blood_sugar)
+
+```
+
+Finally, let's change the title and labels of our plot.
+
+
+```{r}
+
+ggplot(data = heart_df, mapping = aes(x = age, y = cholesterol, color = heart_disease)) +
+  geom_point() +
+  facet_grid(heart_disease ~ fasting_blood_sugar) +
+  labs(title = "Cholesteral vs Age by Heart Disease and Fasting Blood Sugar Levels",
+       x = "Patient Age",
+       y = "Patient Cholesterol")
+
+```
+
+
+## Bar Charts
+
+Now that we have gone through the layers of the template, let's see what adjustments are needed to create a bar chart. 
+
+Let's visualize the number of patients with and without heart disease. Now our `aes` mapping in `ggplot()` only has one variable, heart_disease. 
+
+To produce a bar chart, we use the `geom_bar()` function. The `stat = "count"` option tells `ggplot()` to transform the `heart_disease` column values and generate the counts for each level, Yes or No.
+
+
+```{r}
+
+ggplot(data = heart_df, mapping = aes(x = heart_disease)) +
+       geom_bar(stat = "count")
+
+```
+
+
+In the graph above, behind the scenes `ggplot()` is computing the following transformation to obtain the counts for each level of `heart_disease`.
+
+
+
+```{r}
+
+heart_df %>% group_by(heart_disease) %>% 
+             summarise(count = n())
+
+```
+
+
+If you wanted to compute the summary statistics yourself, you could do the following. 
+
+Using `dplyr`, create a summary data frame, `heart_summary`, that has two variables, `heart_disease` and `count`. The `count` variable will have the number of patients that belong to the corresponding value of `heart_disease`.
+
+Next, you must add `y = count` into the `aes` option in `ggplot()`. This tells `ggplot()` that you want to plot two pairs of coordinates (heart_disease value, count for heart_disease value). In this example, (No, 160), and (Yes, 137).
+
+Finally, you must change `stat = "count"` in `geom_bar()` to `stat = "identity"`
+
+
+```{r}
+
+heart_summary <-  heart_df %>% 
+                  group_by(heart_disease) %>% 
+                  summarise(count = n())
+```
+
+
+```{r}
+#View results
+heart_summary
+
+```
+
+
+```{r}
+# Plot the data, same as before
+ggplot(data = heart_summary, mapping = aes(x = heart_disease, y = count)) +
+       geom_bar(stat = "identity")
+
+```
+
+
+Let's use this same methodology to plot a bar chart of average `old_peak`, by `chest_pain`. This time, let's make the bars blue with a white border and add text labels. To change the bar color for all bars, use the `fill` option within `geom_bar()`. To change the border color, use `color`.
+
+
+```{r}
+
+oldpeak_summary <- heart_df %>% group_by(chest_pain) %>% 
+                   summarise(avg_oldpeak = mean(old_peak))
+```
+
+
+```{r}
+# View results
+oldpeak_summary
+
+```
+
+
+
+```{r}
+# Plot the data
+ggplot(data = oldpeak_summary, mapping = aes(x = chest_pain, y = avg_oldpeak)) +
+      geom_bar(stat = "identity", fill = "#006EA1", color = "white") +
+      labs(title = "Average Old Peak by Chest Pain",
+           x = "Chest Pain",
+           y = "Average Old Peak")
+
+```
+
+
+### Reorder The Categories of a Bar Chart with *reorder()*
+
+To reorder the categorical values of either the x or y axis on a bar chart, we can use the `reorder()` function from base `R`. 
+
+The `reorder()` function has two required arguments - a vector of values in the first argument and another vector of values of equal length as the second argument by which to sort the first. Let's see some examples below.
+
+
+```{r}
+
+ ggplot(data = oldpeak_summary, mapping = aes(x = reorder(chest_pain, avg_oldpeak), 
+                                              y = avg_oldpeak)) +
+        geom_bar(stat = "identity", fill = "#006EA1", color = "white") +
+        labs(title = "Average Old Peak by Chest Pain",
+             x = "Chest Pain",
+             y = "Average Old Peak")
+
+```
+
+
+```{r}
+# To sort values in reverse order, simply put a minus (-) in 
+# front of the second variable
+ggplot(data = oldpeak_summary, mapping = aes(x = reorder(chest_pain, -avg_oldpeak), 
+                                              y = avg_oldpeak)) +
+        geom_bar(stat = "identity", fill = "#006EA1", color = "white") +
+        labs(title = "Average Old Peak by Chest Pain",
+             x = "Chest Pain",
+             y = "Average Old Peak")
+
+```
+
+
+Let's go back to our original bar chart that showed the number of patients with and without heart disease. If we wanted to color the bars by `heart_disease` value, we can perform the same step as with the scatter plot. Now we add `fill = heart_disease` into the `aes` mapping. 
+
+When you add the `fill` option into `aes` it updates the aesthetic mapping to include three dimensions for each bar (`heart_disease` value, count, fill color of `heart_disease` value). 
+
+
+```{r}
+
+ggplot(data = heart_df, mapping = aes(x = heart_disease, fill = heart_disease)) +
+       geom_bar(stat = "count") + 
+       labs(title = "Heart Disease Prevalence", x = "Heart Disease Status",
+            y = "Number of Patients")
+
+```
+
+
+### Adding a Facet Variable
+
+We can add a facet variable in the same way as we did with the scatter plot example, by adding `facet_wrap()`
+
+
+```{r}
+
+ggplot(data = heart_df, mapping = aes(x = heart_disease, fill = heart_disease)) +
+       geom_bar(stat = "count") + 
+       facet_wrap(~ chest_pain, nrow = 1) +
+       labs(title = "Heart Disease Prevalence by Chest Pain", x = "Heart Disease Status",
+            y = "Number of Patients")
+
+```
+
+## Stacked Bar Charts
+
+If we add a variable to `aes(fill = )` that is different from the variable mapped to the x-axis, then we create a stacked bar chart. 
+
+The variable which we add to the `fill` option in `aes`, will add a color based on the level of that variable and will display its width by the number of observations in the data. 
+
+Below we create a stacked bar chart by adding the `chest_pain` variable.
+
+
+```{r}
+
+ggplot(data = heart_df, mapping = aes(x = heart_disease, fill = chest_pain)) +
+       geom_bar(stat = "count") + 
+       labs(title = "Heart Disease Prevalence by Chest Pain",
+            x = "Heart Disease Status",
+            y = "Number of Patients")
+
+```
+
+
+We can also create a 100 percent stacked column chart by adding `position = "fill"` into `geom_bar()`. This will display the proportion of observations that fall into the various values of `chest_pain` within each `heart_disease` value.
+
+
+```{r}
+
+ggplot(data = heart_df, mapping = aes(x = heart_disease, fill = chest_pain)) +
+       geom_bar(stat = "count", position = "fill") + 
+       labs(title = "Heart Disease Prevalence by Chest Pain",
+            x = "Heart Disease Status",
+            y = "Proportion of Patients")
+
+```
+
+
+### Stacking Bars Side by Side
+
+A third option for working with stacked bar plots is to add `position = "dodge"` within `geom_bar()` to stack bars side by side.
+
+These type of plots are usually used to compare multiple values or proportions that are changing over time. 
+
+Let's apply this style to our visualization of `heart_disease` and `chest_pain`.
+
+
+```{r}
+
+ggplot(data = heart_df, mapping = aes(x = heart_disease, fill = chest_pain)) +
+       geom_bar(stat = "count", position = "dodge") + 
+       labs(title = "Heart Disease Prevalence by Chest Pain",
+            x = "Heart Disease Status",
+            y = "Number of Patients")
+
+```
+
+## Column Charts
+
+To obtain a column chart, we can first build a bar chart and then use the `coord_flip()` function to flip the x and y axes. In the example below, we first build a bar chart and then take the necessary steps to build a column chart.
+
+
+### Build a Bar Chart
+
+```{r}
+
+ggplot(data = heart_df, aes(x = fasting_blood_sugar, fill = heart_disease)) +
+    geom_bar(stat = "count") +
+    labs(title = "Fasting Blood Sugar Level by Heart Disease Status",
+         x = "Fasting Blood Sugar", y = "Number of Patients")
+         
+```
+
+
+### Flip The Axes With `coord_flip()`
+
+
+```{r}
+
+ggplot(data = heart_df, aes(x = fasting_blood_sugar, fill = heart_disease)) +
+    geom_bar(stat = "count") +
+    labs(title = "Fasting Blood Sugar Level by Heart Disease Status",
+         x = "Fasting Blood Sugar", y = "Number of Patients") +
+    coord_flip()
+         
+```
+
+
+## Histograms
+
+Histograms are used to visualize the distribution of continuous variables. They automatically create a series of `bins` that combine the values of a numeric variable into categories. Then the number of times the original values fall into these bins is counted and displayed as a vertical bar. These graphs are used to visually assess the properties of numeric variables, such as symmetry, skewness, variability, and central tendency.
+
+To create a histogram, use the `geom_histogram()` function. In the example below I have added `fill = "#006EA1"` and `color = "white"` inside the `geom_histogram()` function. The `fill` option specifies the bar color, while the `color` option specifies the border color of the bars, just as in bar charts.
+
+
+```{r}
+
+ggplot(data = heart_df, mapping = aes(x = resting_blood_pressure)) +
+       geom_histogram(fill = "#006EA1", color = "white") + 
+       labs(title = "Distribution of Resting Blood Pressure",
+            x = "Resting Blood Pressure",
+            y = "Number of Patients")
+
+```
+
+
+The default number of bins for histograms is set to 30. To change this, adjust the `bins` option within the `geom_histogram()` function. In the example below, the histogram is created using 15 bins for the `RestBP` variable.
+
+
+
+```{r}
+
+ggplot(data = heart_df, mapping = aes(x = resting_blood_pressure)) +
+      geom_histogram(fill = "#006EA1", color = "white", bins = 15) + 
+      labs(title = "Distribution of Resting Blood Pressure",
+           x = "Resting Blood Pressure",
+           y = "Number of Patients")
+
+```
+
+
+### Adding Additional Variables to Histograms
+
+Let's look at the distribution of `resting_blood_pressure` by the `heart_disease` variable. We can do this by faceting. I demonstrate how to do this with one and two facet variables in the code below
+
+
+```{r}
+
+ggplot(data = heart_df, mapping = aes(x = resting_blood_pressure, fill = heart_disease)) +
+       geom_histogram(color = "white", bins = 15) + 
+       facet_wrap( ~ heart_disease, nrow = 1) +
+       labs(title = "Distribution of Resting Blood Pressure",
+            x = "Resting Blood Pressure",
+            y = "Number of Patients")
+
+```
+
+
+We can use `facet_grid()` to add another variable to the visualization, `thalassemia`.
+
+
+```{r}
+
+ggplot(data = heart_df, mapping = aes(x = resting_blood_pressure, fill = heart_disease)) +
+       geom_histogram( color = "white", bins = 15) + 
+       facet_grid(heart_disease ~ thalassemia) +
+       labs(title = "Distribution of Resting Blood Pressure",
+            x = "Resting Blood Pressure",
+            y = "Number of Patients")
+
+```
+
+## Density Histograms
+
+Density histograms are used to determine whether a particular theoretical probability density function is a good fit to model the dynamics of that variable in a population. Unlike regular histograms, which provide counts of a numeric variable for a series of bins, density histograms provide the **proportion** of observations falling within a series of bins.
+
+To create a density histogram, use the same syntax as when creating a standard histogram, with the exception of adding `y = ..density..` into the `aes()` option.
+
+
+```{r}
+
+# Density histogram of resting_blood_pressure
+ggplot(data = heart_df, mapping = aes(x = resting_blood_pressure, y = ..density..)) +
+       geom_histogram(fill = "#006EA1", color = "white", bins = 15) + 
+       labs(title = "Distribution of Resting Blood Pressure",
+            x = "Resting Blood Pressure",
+            y = "Proportion of Patients")
+
+```
+
+
+
+## Boxplots
+
+Box plots are a powerful tool for exploring the central tendency and variability of numeric data by various levels of a factor or character. In the examples below, we will produce boxplots with `ggplot()`. 
+
+The `geom` function used is `geom_boxplot()`. 
+
+For boxplots, the `x` argument in `aes` should be a character or factor variable. The "Box" in boxplots represents the IQR (25th - 75th percentiles of data values).
+
+In the next couple of examples, let's use the built-in data frame, `mpg` which has data on over 200 cars and their associated features such as city and highway miles per gallon. 
+
+
+
+```{r}
+mpg
+```
+
+
+The boxplot below visualizes the distribution of `hwy` values by car `class`
+
+
+```{r}
+
+# Box plots of "hwy" variable by "class"
+ggplot(data = mpg, mapping = aes(x = class, y = hwy)) +
+  geom_boxplot(fill = "#006EA1") +
+  labs(title = "Boxplot of hwy by class", x = "Class of Vehicle",
+       y = "Miles per Gallon Highway (hwy)")
+
+```
+
+
+ To color the boxplots by the level of a character or factor variable, we must add this to the aesthetic mapping `aes()`.
+ 
+ In the example below, let's use the `reorder()` function to sort the categories on the x-axis. 
+ 
+ The `reorder()` function takes an optional third argument, `FUN`, which is usually an aggregation function. 
+ 
+ In the example below, we are reordering the `class` categories on the x-axis by the median value of `hwy` within each `class` category.
+
+
+
+```{r}
+
+ggplot(data = mpg, mapping = aes(x = reorder(class, hwy, FUN = median), 
+                                 y = hwy, fill = class)) +
+  geom_boxplot() + 
+  labs(title = "Boxplot of hwy by class",
+       x = "Class", 
+       y = "Miles per Gallon Highway (hwy)")
+
+```
+
+
+In cases where the factor of character variable has long labels, it is useful to use the `coord_flip()` function to switch the order of the axes in the plot. This is demonstrated below.
+
+
+
+```{r}
+# Boxplot fill colors by "class" variable values and flip axes
+ggplot(data = mpg, mapping = aes(x = reorder(class, hwy, FUN = median),
+                                 y = hwy, fill = class)) +
+  geom_boxplot() + 
+  labs(title = "Boxplot of hwy by class", 
+       x = "Class", y = "Miles per Gallon Highway (hwy)") + 
+  coord_flip()
+
+```
+
+
+## Violin Plots With Data Points
+
+A violin plot is another way to visualize numeric variables by character or factor categories to study the numeric value distributions. 
+
+In `ggplot2`, the `geom_violin()` function produces these plots. It is similar to a box plot except that instead of displaying a box for the inter-quartile range (IQR), it display what's known as a `kernel density estimate`. 
+
+A kernel density estimate is simply an estimated probability density function that is plotted along the vertical axis of the plot, symmetrically on both sides. 
+
+The more this function sticks out (greater width), the more the original data points are located in that region of the y-axis.
+
+This visualization is best combined with `geom_jitter()`, which overlays the original data points onto the vertical axis. The `width` argument gives the amount by which to scatter the data points and the `alpha` argument provides the level of color saturation (0.5 represents 50% of the completely filled data points).
+
+
+```{r}
+
+ggplot(data = mpg, mapping = aes(x = reorder(class, hwy, FUN = median), 
+                                 y = hwy, fill = class)) +
+  geom_violin() +  
+  geom_jitter(width = 0.07, alpha = 0.5) +
+  labs(title = "Violin Plot of hwy by class",
+                        x = "Class", y = "Miles per Gallon Highway (hwy)")
+
+```
+
+
+## Line Charts
+
+To create line charts, we use the `geom_line()` function.
+
+Let's say we are interested in studying the average maximum heart rate (`max_heart_rate` variable) and by patient `age`. First, I will use `dplyr` to create a summary data frame with this information.
+
+
+```{r}
+
+heart_summary <-  heart_df %>% group_by(age) %>% 
+                  summarise(patients = n(),
+                            avg_max_hr = mean(max_heart_rate)) %>% 
+                  arrange(age) %>% 
+                  filter(patients >= 5) # Keep Ages with at least 5 patients
+```
+
+
+
+```{r}
+# Let's take a look at the results
+heart_summary
+
+```
+
+
+### Simple Line Chart
+
+Let's plot a line chart with `avg_max_hr` on the y-axis and `age` on the x-axis
+
+```{r}
+
+ggplot(data = heart_summary, mapping = aes(x = age, y = avg_max_hr)) +
+       geom_line(color = "#0072B2")
+
+```
+
+
+Now let's include points in the line chart.
+
+
+```{r}
+
+ggplot(data = heart_summary, mapping = aes(x = age, y = avg_max_hr)) +
+       geom_line(color = "#0072B2") +
+       geom_point(color = "#0072B2")
+
+```
+
+
+Finally, if you are not a fan of the default grey background in `ggplot2`, just add `theme_light()` to the end of any plot. There are many more themes available in `ggplot2`, such as theme_bw(), or theme_classic(). Feel free to experiment with them. 
+
+
+```{r}
+
+ggplot(data = heart_summary, mapping = aes(x = age, y = avg_max_hr)) +
+  geom_line(color = "#0072B2") +
+  geom_point(color = "#0072B2") +
+  theme_light()
+
+```
+
+
+## Learning More
+
+To learn more about the advanced data visualization capabilities of `ggplot2` please see the following resources:
+
+- [Data Visualization with R](https://rkabacoff.github.io/datavis/)
+- [R for Data Science - Data Visualization](https://r4ds.had.co.nz/data-visualisation.html)
+- [ggplot2 documentation](https://ggplot2.tidyverse.org/)
+
+
+

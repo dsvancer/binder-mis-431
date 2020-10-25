@@ -1,0 +1,371 @@
+---
+title: "Inferential Statistics with R"
+author: "David Svancer"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE, 
+                      warning = FALSE,
+                      comment = "")
+```
+
+
+This tutorial will demonstrate how to work with theoretical probability distributions in `R`, generate random data from distributions or data sets, and plot probability distribution curves. We will be working with the `diamonds` data frame which is loaded with the `tidyverse` package. Please install the `gridExtra` package before executing the `R` code below. This package will allow us to put multiple ggplot objects onto one panel.
+
+
+# Data
+
+The `R` code below imports the `tidyverse` and `gridExtra` packages. The `gridExtra` is useful for combining multiple plots created with `ggplot` into a single visualization.
+
+We will be working with the built-in `diamonds` data which is automatically loaded with the `tidyverse` package. A row in this dataset represents a diamond with its associated characteristics and measurements.
+
+
+
+```{r}
+library(tidyverse)
+library(gridExtra)
+
+```
+
+
+The `diamonds` data set contains the prices and other attributes of almost 54,000 diamonds. To learn more about the data, execute `?diamonds` in your `R` console.
+
+
+```{r}
+
+diamonds
+
+```
+
+
+# Random Sampling in R
+
+## Sampling From Data Frames
+
+To demonstrate the process of generating a random sample from a data set, we will use the `diamonds` data frame from `tidyverse`. There are many reasons why we would be interested in taking a random sample of our data, including working with large data files.
+
+For data with millions or billions of rows, it would better to take a random sample of the data, which preserves the statistical relationships present in the data, for data exploration and visualization.
+
+There are two functions in the `dplyr` package designed for this purpose. We can use the `sample_frac()` function from `dplyr` to randomly select a specified proportion of our data or the `sample_n()` function to randomly select a specified number of rows.
+
+These functions are demonstrated in the code below, where we take 2 random samples from the `diamonds` data.
+
+The important arguments to `sample_frac()` are a data frame and the `size` of the sample, which is a proportion between 0 and 1. 
+
+In the code below, we randomly sample 10% (about 5,400) of the rows in `diamonds`
+
+
+```{r}
+# diamonds_1 with sample_frac
+diamonds_1 <- sample_frac(diamonds, size = 0.10)
+
+```
+
+
+The `sample_n()` function has the same first two arguments, however `size` is now an integer between 1 and the total number of rows in the data frame. 
+
+Below we randomly sample 5,400 rows from `diamonds`
+
+
+```{r}
+
+diamonds_2 <- sample_n(diamonds, size = 5400)
+
+```
+
+
+Next, let's create 3 plots of the same type from the 3 data sets, `diamonds`, `diamonds_1`, and `diamonds_2`, and arrange them next to each other with the `grid.arrange()` function from the `gridExtra` package.
+
+`ggplot` objects can be saved just like any other `R` objects. In the code below, we save the plots as `original`, `sample_1`, and `sample_2`.
+
+As you can see, the relationship between `price` and `carat` remains approximately the same even with just 10% of the data.
+
+For large datasets, it's best to use a small value of `alpha` within `geom_point()` due to overlapping points.
+
+
+```{r}
+
+original <- ggplot(data = diamonds, mapping = aes(x = carat, y = price)) + 
+            geom_point(alpha = 0.1) + labs(title = "Original", y = 'Diamond Price') + theme_light()
+
+sample_1 <- ggplot(data = diamonds_1, mapping = aes(x = carat, y = price)) + 
+            geom_point(alpha = 0.1) + labs(title = "Sample 1", y = '') + theme_light()
+
+sample_2 <- ggplot(data = diamonds_2, mapping = aes(x = carat, y = price)) + 
+            geom_point(alpha = 0.1) + labs(title = "Sample 2", y = '') + theme_light()
+
+```
+
+
+```{r fig.width = 9}
+# Arrange the saved plots next to each other
+grid.arrange(original, sample_1, sample_2,nrow = 1)
+
+```
+
+
+## Sampling From Vectors
+
+The `sample()` function takes a sample of the specified size from the elements of a vector either with or without replacement. This is useful for simulating probability experiments, such as tossing a coin or die, and splitting a data set into a training set and test set (more on this when we study cross-validation to access model under-fitting/over-fitting).
+
+Arguments to the `sample()` function:
+
+
+-   `x` - A (numeric, character or logical) vector of more than one element from which to choose
+
+-   `size` - Non-negative integer giving the number of items to choose
+
+-   `replace` - Should sampling be with replacement? (Default is FALSE)
+
+-   `prob` - A vector of probability weights for obtaining the elements of the vector being sampled. If `NUL`L, elements of `x` are assumed to be equally likely to be chosen
+
+
+
+### Tossing a Fair Coin
+
+To demonstrate how `sample()` works, let's simulate tossing a fair coin. The code below produces a single random coin flip where "H" represents lands on heads and "T" represents lands on tails.
+
+
+```{r}
+
+sample(c("H", "T"), size = 1, prob = c(1/2, 1/2))
+
+```
+
+
+The code below produces 10 random coin flips. In this case we must use `replace = TRUE` so that after a "heads" is observed it can be sampled again, for example. 
+
+Note that the default of the `prob` argument is to make the elements of the input vector equally likely. Therefore, we do not need to add `prob = c(1/2, 1/2)` since this is automatically done for us. 
+
+
+```{r}
+# A fair coin
+sample(c("H", "T"), size = 10, replace = TRUE)
+
+```
+
+
+To flip a biased coin, we need to specify the unequal probabilities.
+
+```{r}
+# A biased coin
+sample(c("H", "T"), size = 10, replace = TRUE, prob = c(0.05, 0.95))
+
+```
+
+
+### Setting Random Seeds
+
+The `set.seed()` function is used to set the random number generator within `R` to a fixed initial starting point. 
+
+As before, we will get random observations from an experiment when we execute any function that performs random sampling.
+
+However, after the first time we execute the function(s), we will get the same results for every successive run. 
+
+This is important if you need to reproduce your results in follow-up analyses. The code below produces a random coin flip that lands on tails. When the code is executed again, it will always land on tails.
+
+
+```{r}
+# Place any integer into set.seed() to initialize
+set.seed(314)
+
+sample(c("H", "T"), size = 1)
+
+```
+
+
+We can also write a function that when called, will produce a random coin flip. In this case, our function will have no formal arguments, it will just execute the code within the body of the function.
+
+
+```{r}
+# Function to generate a random coin flip
+coin_flip <- function() {
+               sample(c("H", "T"), size = 1) }
+```
+
+
+```{r}
+# Call the function 
+coin_flip()
+
+```
+
+
+# Probability Distributions
+
+When working with probability distributions in `R`, we are generally concerned with the following activities:
+
+
+- Obtaining random samples from a distribution - functions will begin with `r`
+
+- Obtaining quantiles (percentiles) from a distribution - functions will begin with `q`
+
+- Obtaining the probability that a random observation will be less than or equal to a specified value - functions will begin with `p`
+
+- Obtaining the value of the density function at a particular point - functions will begin with `d`
+
+
+## Random Samples From Distributions
+
+To generate random observations from either a Normal or t distribution, we use `rnorm()` and `rt()`.
+
+
+The code below will generate a vector of 10 random observations from a [normal distribution](https://en.wikipedia.org/wiki/Normal_distribution) with mean 60 and standard deviation 5.
+
+
+```{r}
+normal_obs <- rnorm(n = 10, mean = 60, sd = 5)
+
+```
+
+
+```{r}
+
+normal_obs
+
+```
+
+
+The code below will generate a vector of 10 random observations from a [t distribution](https://en.wikipedia.org/wiki/Student_t-distribution) with 5 degrees of freedom.
+
+
+```{r}
+# Generate a vector of 10 random observations from a t distribution 
+# with 5 degrees of freedom
+t_obs <- rt(n = 10, df = 5)
+
+```
+
+
+```{r}
+# View results
+t_obs
+
+```
+
+## Quantiles (Percentiles)
+
+To obtain the values that correspond to particular percentiles of the normal or t distribution, we use `qnorm()` and `qt()`.
+
+In the code below, we use `qnorm()` to obtain the 95th percentile value for a normal distribution with mean 60 and standard deviation 5. 
+
+This value is equal to 68.22 and means that 95% of values that are sampled at random from this distribution will be less than or equal to 68.22.
+
+
+```{r}
+p_95th_normal <- qnorm(p = 0.95, mean = 60, sd = 5)
+
+```
+
+
+```{r}
+p_95th_normal
+
+```
+
+
+Next we use `qt()` to obtain the 95th percentile value for a t distribution with 5 degrees of freedom.
+
+
+```{r}
+p_95th_t <- qt(p = 0.95, df = 5)
+
+```
+
+
+```{r}
+# Check results
+p_95th_t
+
+```
+
+
+## Cumulative Probabilities
+
+To obtain the probability a random observation will be less than or equal to a specific value of the normal or t distribution, we use `pnorm()` and `pt()`.
+
+From the output below, the probability that a random sample from a normal distribution with mean 60 and standard deviation 5 will be less than the value 68.22, is 0.95.
+
+
+```{r}
+pnorm(q = 68.22427, mean = 60, sd = 5)
+
+```
+
+
+For obtaining cumulative probabilities for t distributions, we use the `pt()` function.
+
+
+```{r}
+
+pt(q = 2.015048, df = 5)
+
+```
+
+
+## Probability Density Values
+
+To obtain the probability density values at a specific point, we use `dnorm()` and `dt()`. This returns the height of the normal or t distribution function at the given point.
+
+These functions are mainly used for plotting normal and t distributions. They return the density functional values, f(x), at the input value, x, for a particular distribution.
+
+In the code below, we obtain the height of the normal distribution function with mean 60 and standard deviation 5 at the value 60.
+
+
+```{r}
+dnorm(x = 60, mean = 60, sd = 1)
+
+```
+
+
+The `dt()` function returns the height of a t distribution with a specified degree of freedom.
+
+```{r}
+# Density value at x = 1 for a t Distribution
+# with 5 degrees of freedom
+dt(x = 1, df = 1)
+
+```
+
+
+# Density Histograms With Normal Density Estimate
+
+Density histograms are used to study the shape of numerical data and determine whether a particular theoretical probability density function is a good fit to model the probability dynamics of that variable in a population. 
+
+Unlike regular histograms, which provide counts of a numeric variable for a series of bins, density histograms provide the proportion of observations falling within a series of bins.
+
+Below we use `geom_histogram()` to make a histogram of the values in the `table` column of the `diamonds` data.
+
+
+```{r fig.width=9}
+# Density histogram of "table"
+ggplot(data = diamonds, mapping = aes(x = table, y = ..density..)) +
+geom_histogram(fill = "#006EA1", color = "white", bins = 20) + 
+labs(title = "Density Histogram of table (Top Diamond Width Relative to Widest Point)",
+      x = "Diamond Table",
+      y = "Proportion of Observations")
+
+```
+
+
+We can overlay a theoretical probability density function over a density histogram to determine if the function serves as a good probability model. This is done with `stat_function()` in `ggplot2`.
+
+**Note**: When overlaying functions onto density histograms, make sure to only add `y = ..density..` into the aesthetic mapping of `geom_histogram()`, otherwise it would be passed into `stat_function()` which would generate an error.
+
+
+```{r fig.width=9}
+
+ggplot(data = diamonds, mapping = aes(x = table)) +
+geom_histogram(mapping = aes(y = ..density..), fill = "#006EA1", 
+               color = "white", bins = 30) + 
+labs(title = "Density Histogram of table (Top Diamond Width Relative to Widest Point)",
+      x = "Diamond Table",
+      y = "Proportion of Observations") +
+stat_function(fun = dnorm, # fun to calculate density value
+              args = list(mean = mean(diamonds$table), # args to pass to dnorm
+                          sd = sd(diamonds$table)),
+              color = "orange",
+              size = 1)
+
+```

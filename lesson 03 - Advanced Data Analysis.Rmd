@@ -1,0 +1,763 @@
+---
+title: "Advanced Data Manipulation"
+author: "David Svancer"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE, 
+                      warning = FALSE,
+                      comment = "")
+```
+
+
+In this tutorial, we will cover more advanced techniques for data manipulation with `dplyr`.
+
+
+First let's load the `tidyverse` and `skimr` packages as well as the `employee_data` tibble into our `R` environment.
+
+
+```{r}
+# This will load all 8 of the tidyverse packages
+library(tidyverse)
+library(skimr)
+
+# Load employee_data
+employee_data <- read_rds(url('https://gmudatamining.com/data/employee_data.rds'))
+
+# View data
+employee_data
+    
+```
+
+
+
+# Review
+
+Before we begin our study of advanced techniques for data manipulation, let's review the core `dplyr` functions from our last tutorial. Let's say that we are interesting in answering the following question:
+
+Do employees who have left the company tend to work more weekly hours, on average?
+
+
+
+On way to answers this question would be to execute the following `dplyr` workflow
+
+
+- start with `employee_data`
+- create a new variable that standardizes the `weekly_hours` column by subtracting the mean and dividing by the standard deviation
+- select only the rows of `employee_data` where `left_company` is **yes**
+- calculate the average of the standardized weekly hours variable 
+
+
+
+Remember that when we standardize a numeric variable by subtracting the mean and dividing by the standard deviation the resulting values are in `standard deviation units`. 
+
+So a 2.2 value on this scale represents a value that is 2.2 standard deviations to the right of the average value in the original data. A value of 0 on this scale represents the average value in the original data.
+
+The code below executes our analytics workflow and we see that employees who left the company tend to work more weekly hours on average. In fact, these employees work nearly 2 standard deviations to the right of the average hours across all employees in the company.
+
+
+```{r}
+employee_data %>% 
+  mutate(hours_scaled = (weekly_hours - mean(weekly_hours)) / sd(weekly_hours)) %>% 
+  filter(left_company == 'Yes') %>% 
+  summarise(avg_weekly_hours = mean(hours_scaled))
+```
+
+
+
+Note that we standardized our data **before** selecting employees that left the company. 
+
+- What if selected the employees who left and then created our standardized weekly hours variable? 
+- Would this have answered our question? 
+
+
+
+Try to perform this with `dplyr` and see what you get. What does it mean in this case?
+
+```{r}
+
+
+
+
+```
+
+
+# Split-Apply-Combine
+
+A common data analysis technique, known as `split-apply-combine`, involves creating statistical summaries **by groups** within a data frame.
+
+Using the `split-apply-combine` technique with `dplyr` usually involves taking a data frame, forming subsets with the `group_by()` function, applying a summary function to to the groups, and collecting the results into a single data frame.
+
+
+
+## group_by()
+
+The `group_by()` function allows you to perform tasks `by groups` in your data. A typical application of the `group_by()` function is when addressing questions such as *What is the average salary of employees by department*?
+
+The `group_by()` function will separate a data frame into distinct groups using the variable(s) that is/are supplied as the argument. Behind the scenes, the `group_by()` function splits a data frame into multiple data frames, one for each unique value of the grouping variable. Any `dplyr` functions that follow afterward are applied to the groups within the grouped data frame. 
+
+Below is an example of how we would answer the question from above.
+
+
+
+```{r}
+employee_data %>% 
+  group_by(department) %>% # form groups by department
+  summarise(average_salary = mean(salary)) # calculate mean within each group
+
+```
+
+
+
+The `group_by()` function can be used to form groups with multiple levels. This happens when we pass more than one variable into the function.
+
+Let's say we are interested in answering the following question: *What is the average salary of employees by department and whether they left the company or not*?
+
+The small adjustment to our previous code below will answer this for us.
+
+
+
+```{r}
+employee_data %>% 
+  group_by(left_company, department) %>% # form groups by department and left_company
+  summarise(average_salary = mean(salary)) # calculate mean within each combination of values
+```
+
+
+
+
+
+<h3 style = "color: #006940"> Test Your Knowledge </h3>
+What `dplyr` commands would you need to add to the previous code so that results are sorted as they appear below?
+
+
+
+```{r echo = FALSE}
+employee_data %>% 
+  group_by(left_company, department) %>% # form groups by department and left_company
+  summarise(average_salary = mean(salary)) %>% 
+  arrange(department, desc(left_company))
+```
+
+
+
+The `group_by()` function can also be used in combination with the `mutate()` function.
+
+Imagine if we wanted to accomplish the following:
+
+Create a new `salary_scaled_dept` variable that scales the `salary`variable by subtracting the mean and dividing by the standard deviation. However, unlike in our previous example, we want to scale each `salary` value **within each department**.
+
+This task is accomplished by the code below. First we group `employee_data` by the unique values in the `department` variable and then apply the transformation. Within `mutate()`, the function `mean(salary)` is calculating the mean `salary` value **within each group**.
+
+
+
+```{r}
+employee_data %>% 
+  group_by(department) %>% 
+  mutate(salary_scaled_dept = (salary - mean(salary)) / sd(salary)) %>% 
+  select(department, salary_scaled_dept)
+```
+
+
+
+What if we want to create a `salary_scaled` variable, like in our review example, as well? Maybe we would like to see how the standardized values differ across all employees as well as within each department. 
+
+To achieve this, we must add a step to our code above. 
+
+First we use `mutate()` to create a `scaled_salary` variable across all rows. We then pass this into a `group_by()` function where we perform the same calculation by group. This complex set of transformations is easy to follow when we use the `%>%` operator.
+
+
+
+```{r}
+employee_data %>% 
+  mutate(salary_scaled = (salary - mean(salary)) / sd(salary)) %>% # scale across all rows
+  group_by(department) %>% # form groups by department
+  mutate(salary_scaled_dept = (salary - mean(salary)) / sd(salary)) %>% # scale within each group
+  select(department, salary_scaled, salary_scaled_dept)
+```
+
+
+## Exploring Grouped Data Frames with `skim()`
+
+In lesson 2, we explored data frames with the `skim()` function from the `skimr()` package.
+
+The `skim()` function takes a data frame as input and provides a high-level summary of the structure of the data frame and the values within its columns. 
+
+As output, we get:
+
+- the number of rows and columns along with the data types present in our data
+- a summary of our factor variables, including the number of missing observations, whether our factor levels are ordered, the count of unique levels, and an abbreviated list of the most frequent factor levels
+- a summary of our numeric variables which include the number of missing observations, the mean and standard deviation, a five number summary, and a plot of the distribution of values
+
+
+An added bonus of the `skim()` function, is that is accepts a grouped data frame as well. In this case all summary statistics will be calculated by group.
+
+In the code below, we use the `%>%` operator to group the `employee_data` tibble by `department` and pass it into the `skim()` function. Notice that all summaries are now provided by each department.
+
+
+```{r}
+# View data frames summaries by groups
+employee_data %>% group_by(department) %>% 
+  skim()
+```
+
+
+As before, we can select a subset of columns to explore by typing their names within the `skim()` function. 
+
+```{r}
+# View data frames summaries by groups
+employee_data %>% group_by(department) %>% 
+  skim(left_company, salary)
+```
+
+
+
+## Counting rows with `n()` and `count()`
+
+The `group_by()` function is also used for obtaining counts of factor or character variable values. 
+
+The `n()` function is used to count the number of rows within a data frame. It can be used within either `summarise()` or `mutate()`. If a grouped data frame is used, the `n()` function will tally the number of rows within each level of the grouping variable. 
+
+Unlike other `dplyr` functions, `n()` takes no arguments. In the example below, we group `employee_data` by `left_company` and use `n()` within `summarise()` to count the number of rows within the levels of `left_company`. This will tally the number "Yes" and "No" values within `left_company`.
+
+
+
+
+```{r}
+# The n() function in dplyr returns the number of rows per group
+employee_data %>% group_by(left_company) %>% 
+                  summarise(number_employees = n())
+
+```
+
+
+This type of summary is so common, that `dplyr` provides a function named `count()` to provide counts by levels of single or multiple variable combinations. This function creates a column named `n` with the counts. The `count()` function is best used with factor or character columns that do not have too many unique values.
+
+
+
+```{r}
+# Count the occurrence of each unique value in department
+employee_data %>% count(department)
+```
+
+
+```{r}
+# Counts can be sorted
+employee_data %>% count(department, sort = TRUE)
+```
+
+
+```{r}
+# Count variable can be renamed
+employee_data %>% count(department, sort = TRUE, name = 'number_of_employees')
+
+```
+
+
+
+The `count` function also takes multiple variables as arguments. This will count all of the combinations of variable values that are present in the data.
+
+```{r}
+# The count() function also takes multiple arguments
+employee_data %>% count(left_company, department, name = 'number_of_employees')
+
+```
+
+
+Keep in mind that all `dplyr` functions return a data frame so we can easily use other `dplyr` functions on the results on `count()`.
+
+```{r}
+# Arrange the output by department and left_company
+employee_data %>% count(left_company, department, name = 'number_of_employees') %>% 
+  arrange(department, left_company)
+```
+
+
+
+One more example. How many employees are there by job satisfaction? What are their average miles from the office by each category?
+
+
+```{r}
+employee_data %>% group_by(job_satisfaction) %>% 
+                  summarise(number_of_employees = n(),
+                            avg_miles = mean(miles_from_home))
+```
+
+
+
+Can you figure out why the code below doesn't work? 
+
+**Hint**: highlight and execute `employee_data %>% count(job_satisfaction, name = 'number_of_employees')`. What does this give you? 
+
+This is what is being passed to `summarise()`by the second `%>%` operator in the expression below. 
+
+Why doesn't `summarise()` know how to calculate the mean of the `miles_from_home` variable?
+
+
+
+```{r eval = FALSE}
+employee_data %>% count(job_satisfaction, name = 'number_of_employees') %>% 
+                  summarise(avg_miles = mean(miles_from_home))
+```
+
+
+
+### A Warning on Working With `group_by()`
+
+When using `group_by()` it's important to know that all `summarise()` and `mutate()` functions are `applied by group`. If you need to apply functions to all rows of a data frame and not by groups, then use the `ungroup()` function to un-group the input data frame.  
+
+Let's say that we want to create a data frame that has employees grouped by `left_company` and `job_level`. For each group, we want the number of employees in that group and the percentage these employees represent of **all** employees in the data set.
+
+In the code below, I first calculate this the incorrect way. Notice that the `percent_total_employees` sums to 200. This is because the `mutate()` function was applied to the grouped data frame that `summarise()` produced. So we get the percentage for each group within "Yes" and "No".
+
+```{r}
+# Not what we wanted
+employee_data %>% group_by(left_company, job_level) %>% 
+                  summarise(employees = n()) %>% 
+                  mutate(percent_of_total_employees = 100*(employees/sum(employees)))
+
+```
+
+
+
+To avoid these type of surprises, I recommended dropping groups after summary statistics have been calculated. This is done with the `ungroup()` function.
+
+```{r}
+# This is correct
+employee_data %>% group_by(left_company, job_level) %>% 
+                  summarise(employees = n()) %>% 
+                  ungroup() %>% 
+                  mutate(percent_of_total_employees = 100*(employees/sum(employees)))
+
+```
+
+
+
+# Obtaining Distinct Values
+
+The `n()` function counts the number of rows in an data frame while the `n_distinct()` function counts the number of unique values observed in a variable. This is useful in many situations.
+
+Like the `n()` function, `n_distinct()` is used within `summarise()` or `mutate()`.
+
+Let's say we wanted to know the number of distinct departments that are in the `employee_data` data frame. The code below will calculate this. We simply pass the `department` variable into `n_distinct()`
+
+
+```{r}
+employee_data %>% 
+  summarise(number_of_departments = n_distinct(department))
+
+```
+
+
+
+# Advanced Filtering
+
+## Ranking Data with `top_n()`
+
+The `top_n()` function can be used to subset a data frame based on the ranked values of a particular variable. This function takes three inputs:
+
+
+- a data frame
+- number of rows to return
+- variable used for ordering
+
+
+
+In the example below, I filter the `employee_data` dataset to include only the top 3 rows based on the `salary` values. By default, `top_n()` will return the rows with the 3 largest values of `salary`.
+
+```{r}
+employee_data %>% top_n(3, salary)
+
+```
+
+
+
+If there are any ties, the `top_n()` function will return all values. Notice that we get 4 rows in the output below. This is because the top 3 values of `yrs_at_company` are 40, 37, and 36 and there are two instances of 36 in the data.
+
+```{r}
+employee_data %>% top_n(3, yrs_at_company)
+```
+
+
+
+## Selecting Rows with `slice()`
+
+The `slice()` function is used to rows by a numeric index. If you want only the first 3 rows of a data frame, you could use *slice(1:3)*. 
+
+Let's re-create the top 3 analysis we just performed, but this time we'll keep only the first three 3 rows.
+
+
+
+```{r}
+# Keep just the first 3 rows
+employee_data %>% slice(1:3)
+
+```
+
+
+```{r}
+# Keep rows 1, 200, 1002
+employee_data %>% slice(1, 200, 1002)
+
+```
+
+
+
+The `slice()` function can be used as an alternative to `top_n()` when paired with `arrange()`. This has the benefit of dropping tied values.
+
+The code below returns the top 3 values of `yrs_at_company` just as above, but only keeps the first 3 rows. This is achieved by first ordering the values of `yrs_at_company` in descending order.
+
+```{r}
+employee_data %>% arrange(desc(yrs_at_company)) %>% 
+                  slice(1:3)
+```
+
+
+
+
+The `slice()` and `top_n()` functions are also useful for creating subsets by groups in a data frame. 
+
+Let's say that we wanted to filter the `employee_data` data frame to only include the top 2 employees with the largest values of `salary` for each department. The code below shows how we would accomplish this with `group_by()` and `top_n()`.
+
+```{r}
+
+employee_data %>% group_by(department) %>% 
+                  top_n(2, salary)
+
+```
+
+
+To make things easier to interpret, we can arrange the results from above by `department` and `salary`
+
+```{r}
+employee_data %>% group_by(department) %>% 
+                  top_n(2, salary) %>% 
+                  arrange(department, desc(salary))
+
+```
+
+
+
+
+# Using Logical Subsetting
+
+## Special Properties of Logical Vectors
+
+Imagine we have data from a survey we recently conducted where 7 people responded and provided their age. This data is stored in the age vector below.
+
+```{r}
+age <- c(23, 31, 27, 41, 54, 34, 25)
+
+age
+```
+
+What if we would like to know the number of people who are 30 or older and what percentage of the total respondents this group represents.
+
+We can answer this question by first using the  `>=` operator to find where values stored in the age vector are greater than or equal to the value 30. Anytime we use comparison operators (>, >=, <, <=, ==) on a vector, we will get a logical vector consisting of `TRUE/FALSE` values indicating where our condition was met.
+
+For example, running the code below produces a sequence of `TRUE/FALSE` values that test where our respondents are 30 or older in the age vector.
+
+```{r}
+age >= 30
+```
+
+## Two Important Properties
+
+To answer our question above, we can use the following properties of logical vectors in `R`:
+
+- the sum of a logical vector returns the number of TRUE values
+- the mean of a logical vector returns the proportion of TRUE values
+
+We see from the output below that 4 people in our survey were 30 years or older and that this represents 57% of the total respondents.
+
+```{r}
+sum(age >= 30)
+
+mean(age >= 30)
+```
+
+
+
+## Logical Subsetting Within `summarise()`
+
+We can use these properties to extend our capabilities with `summarise()`. What if someone asked us how many employees there are by department and the count and proportion of those employees that make less than $60,000?
+
+```{r}
+
+employee_data %>% group_by(department) %>% 
+                  summarise(employees = n(),
+                            employees_less_60 = sum(salary < 60000),
+                            employees_less_60_prop = mean(salary < 60000))
+
+```
+
+
+
+
+# Common Data Manipulation Tasks
+
+This section covers some common data analysis tasks that we will be performing on data frames throughout the semester. To demonstrate these tasks, let's work with the following simple data frame.
+
+The code below creates a simple data set with results from a job survey.
+
+```{r}
+survey <- tibble(age = c(26, 31, 28, 42, 31, 37, 51, 29),
+                 job_function = c('Biotechnology', 'Analytics', 'Machine Learning',
+                                  'Marketing','Biotechnology', 'Machine Learning', 
+                                  'Analytics', 'Biotechnology'),
+                 job_industry = c('Healthcare', 'Healthcare', 'Financial Services',
+                                  'Retail', 'Non-Profit', 'Education',
+                                  'Retail', 'Healthcare'),
+                 job_level = c('Entry', 'Mid', 'Mid', 'Senior', 'Mid', 
+                               'Mid', 'Senior', 'Mid'),
+                 salary = c(75500, 87600, 97000, 92000, 89000,
+                            108500, 121000, 94000))
+
+survey
+```
+
+
+
+## Recoding Categorical Variables
+
+In many cases, you will need to re-code the values of a given variable. In our data, we have a `job_function` variable that captures our survey respondents' specific role within their company. 
+
+What if we wanted to replace "Analytics" and "Machine Learning" with "Data Science". We can achieve this goal by using the `recode()` function.
+
+This functions takes a vector to modify as its first argument and a series of replacements in the form `old value = new value` separated by commas. All values that are left out will be kept the same.
+
+Below is an example of how to use this function on the `job_function` column within our `survey` data.
+
+
+
+```{r}
+recode(survey$job_function,
+       'Analytics' = 'Data Science',
+       'Machine Learning' = 'Data Science')
+```
+
+
+
+To obtain the results as a factor variable, we can use the `recode_factor()` function. The `recode_factor()`function has the same arguments as `recode()`, but will return a factor as a result. 
+
+In the code below, we will use `mutate()` to create new variables that recode "Analytics" and Machine Learning" into "Data Science". One will be with `recode()`, which will return a character variable, and one with `recode_factor()`. 
+
+Notice in the output, that even those the two new columns look identical, there types are different.
+
+
+
+```{r}
+survey %>% 
+  mutate(job_function_chr = recode(job_function,
+                                 'Analytics' = 'Data Science',
+                                 'Machine Learning' = 'Data Science'),
+         job_function_fct = recode_factor(job_function,
+                                          'Analytics' = 'Data Science',
+                                          'Machine Learning' = 'Data Science'))
+```
+
+
+For more examples of the `recode()` functions, see the [tidyverse documentation](https://dplyr.tidyverse.org/reference/recode.html){target="_blank"}
+
+
+
+
+## Creating Variables with `case_when()`
+
+The `case_when()` function from the `dplyr` package is particularly useful when you need to create a new variable that relies on a complex combination of existing variables in a data frame. 
+
+The `case_when()` function takes a sequence of two-sided formulas. The left hand side determines which values match this case and the right hand side provides the replacement value. 
+
+The general syntax is `logical condition ~ replacement value`, where the logical condition can involve multiple variables from a data frame. The sequence ends with `TRUE ~ value for all other cases`.
+
+The sequence is evaluated in the order that it is put into `case_when()`. This syntax is best understood with an example.
+
+
+
+In the code below, we use `case_when()` to create a new character vector from the `age` and `job_function` columns in the `survey` data. 
+
+Let's say that we would like to create a new column that labels people that are 30 years or older and work in Analytic or Machine Learning as "Data Science, 30+" and people who are 30 and older and work in Biotechnology as "Biotechnology, 30+". For all other respondents to our survey,  we would like "Other".
+
+```{r}
+survey_updated <- survey %>% 
+                  mutate(ds_biotech_30 = case_when(age >= 30 & job_function %in% c('Analytics', 'Machine Learning') ~ 'Data Science, 30+',
+                                                age >= 30 & job_function == "Biotechnology" ~ "Biotechnology, 30+",
+                                                TRUE ~ 'Other'))
+
+survey_updated
+                        
+```
+
+
+For more examples of the `case_when()` function, see the [tidyverse documentation](https://dplyr.tidyverse.org/reference/case_when.html){target="_blank"}
+
+
+
+
+## Binning Numeric Variables
+
+Converting numeric columns into categories is a common data analysis task. A numeric variable can be partitioned into categories by using the `cut()` function. Let's say that we want to create a categorical age variable with the following values: "Less than 25", "25 - 35", and "36 and older".
+
+The `cut()` function divides a numeric vector into intervals and codes the values according to which interval they fall. The `cut()` function takes the following arguments:  
+
+`x` - a numeric vector  
+
+`breaks` - a numeric vector of cut points (can include `-Inf` and `Inf`)  
+
+`labels` - a vector of labels for the resulting intervals (optional)  
+
+`right` - logical (default is TRUE), indicating if the intervals should be closed on the right (i.e. (a, b])
+
+
+
+The nice thing about `cut()` is that it returns an ordered factor vector as a result.
+
+Below is an example of using `cut()` on the `age` vector in `survey`. 
+
+The symbols `-Inf`, and `Inf` in the `breaks` argument stand for the lowest and largest observed values, respectively. 
+
+Using the `breaks` from below, the `cut()` function will segment the `age` values into the following categories:
+
+
+
+(-infinity, 24],  (24, 35], and (35, +infinity)
+
+
+
+```{r}
+# original values
+survey$age
+
+# Using cut()
+cut(x = survey$age,
+    breaks = c(-Inf, 24, 35, Inf),
+    labels = c("Less than 25", "25 - 35", "36 and older"),
+    right = TRUE)
+```
+
+
+Here is an example of doing the above task with `dplyr` and `mutate()`.
+
+```{r}
+survey %>% 
+  mutate(age_category = cut(age,
+                            breaks = c(-Inf, 24, 35, Inf),
+                            labels = c("Less than 25", "25 - 35", "36 and older"),
+                            right = TRUE)) %>% 
+  select(age, age_category)
+```
+
+
+
+
+
+
+## Automatic Binning
+
+There are three very useful functions within the `tidyverse` package that perform automating binning of numeric data for quick exploratory analysis. These functions take a numeric vector as input and return a factor with labeled levels.
+
+
+- `cut_interval()` makes n groups with `equal range`
+- `cut_number()` makes n groups with (approximately) `equal numbers of observations`
+- `cut_width()` makes groups of a `given width` 
+
+
+
+## `cut_interval()`
+
+```{r}
+# Original variable
+survey$age
+
+```
+
+
+```{r}
+# cut_interval
+age_interval <- cut_interval(survey$age, n = 3)
+
+# View results
+age_interval
+
+```
+
+
+```{r}
+# Obtain factor level counts
+summary(age_interval)
+```
+
+
+
+## `cut_number()`
+
+```{r}
+# cut_number
+age_number <- cut_number(survey$age, n = 3)
+
+# View results
+age_number
+```
+
+
+```{r}
+# View factor level counts
+summary(age_number)
+
+```
+
+
+
+## `cut_width()`
+
+The `cut_interval()` takes a `width` argument which specifies the width of each interval and a `boundary` argument for centering intervals. By default boundary is equal to 0.5 which may led to intervals have non-integer end points. I usually set boundary to 0 so that the intervals always fall between integer values.
+
+```{r}
+# Original variable
+survey$age
+
+```
+
+
+```{r}
+# cut_width
+age_width <- cut_width(survey$age, width = 10, boundary = 0)
+
+```
+
+
+```{r}
+# View result
+age_width
+
+```
+
+
+```{r}
+# View counts
+summary(age_width)
+
+```
+
+
+
+## Example with `employee_data`
+Let's use the `cut_width()` function to accomplish the following data analysis workflow with `dplyr`
+
+
+
+- Start with `employee_data`
+- Create a `miles_category` variable that bins `miles_from_home` values in 5 mile increments
+- Form groups by `left_company` and `miles_category`
+- Count the number of employees that fall into each combination
+
+
+
+```{r}
+employee_data %>% 
+  mutate(miles_category = cut_width(miles_from_home, width = 5, boundary = 0)) %>% 
+  group_by(left_company, miles_category) %>% 
+  summarise(employees = n())
+           
+```

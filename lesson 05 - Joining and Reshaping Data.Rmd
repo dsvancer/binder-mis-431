@@ -1,0 +1,604 @@
+---
+title: "Relational and Tidy Data"
+author: "David Svancer"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE, 
+                      warning = FALSE,
+                      comment = "")
+```
+
+
+In this tutorial, we will learn about joining data with `dplyr`, pivoting data frame with `tidyr`, and data visualization with `ggplot2`. These three packages are the most widely used packages within the `tidyverse` for data analysis.
+
+
+
+# Joining Data Frames
+
+To demonstrate joining data, let's create two simple data frames, one with customer purchases and
+the other with product information. The connection between these two data frames is the `product_id` variable. 
+
+Within `dplyr` syntax, `product_id` is called a **key variable**.
+
+Before we can begin, we must load the `tidyverse` package.
+
+
+
+```{r}
+library(tidyverse)
+```
+
+
+```{r}
+
+purchases <- tibble(customer_id = c(45, 12, 100, 100, 54, 25),
+                    product_id = c(1, 1, 3, 5, 6, 1))
+
+products <- tibble(product_id = c(1, 2, 3, 4, 5, 6),
+                 product_type = c("Tennis ball", "Soccer ball", "Hockey puck",
+                                  "Football", "Basketball", "Baseball"),
+                 price = c(1.25, 22.25, 8.75, 15.25, 17.25, 7.25))
+```
+
+
+```{r}
+# View data
+purchases
+
+```
+
+
+```{r}
+products
+
+```
+
+
+First we will focus on **mutating joins**. A mutating join allows you to combine variables from two data frames. Observations are matched by their values on the key variable.
+
+
+## Left Joins
+
+The syntax for a left join is as follows:
+
+```{r, eval = FALSE}
+
+left_join(A, B, by = "key")
+
+```
+
+
+A left join will return all rows from `A`, and all columns that appear in both `A` and `B`.  
+Rows in `A` with no match in `B` on the key variable are returned as missing (`NA`) values.  
+Rows in `A` with multiple matches in `B` will be duplicated.  
+
+Let's see some examples of left joins.
+
+
+
+```{r}
+# Bring in product information to purchases data
+left_join(purchases, products, by = "product_id")
+
+```
+
+
+```{r}
+# Bring in purchase data to product table
+left_join(products, purchases, by = "product_id")
+
+```
+
+
+We can also use the `select()` function to only join a subset of a data frame.
+```{r}
+# Bring in product prices only
+left_join(purchases, 
+          products %>% select(product_id, price), 
+          by = "product_id")
+
+```
+
+
+## Right Joins
+
+The syntax for a right join is as follows:
+
+```{r, eval = FALSE}
+right_join(A, B, by = "key")
+```
+
+
+A right join will return all rows from `B`, and all columns that appear in both `A` and `B`.  
+Rows in `B` with no match in `A` on the key variable are returned as missing (`NA`) values.  
+Rows in `B` with multiple matches in `A` will be duplicated.  
+
+Any right join can also be written as a left join. Let's see some examples of right joins.
+
+
+
+```{r}
+# Bring in product information to purchases data
+right_join(products, purchases, by = "product_id")
+
+```
+
+
+
+```{r}
+# Bring in purchase data to product table
+right_join(purchases, products, by = "product_id")
+
+```
+
+
+## Inner Joins
+
+The syntax for an inner join is as follows:
+
+```{r, eval = FALSE}
+inner_join(A, B, by = "key")
+
+```
+
+
+An inner join will return all rows from `A` where there are matching key values in `B`, and all columns that appear in both `A` and `B`.  
+If there are multiple matches between `A` and `B`, all combinations of these matches are returned
+
+Let's see some examples of inner joins.
+
+
+```{r}
+# All observations in products and purchases with all combinations
+inner_join(products, purchases, by = "product_id")
+
+```
+
+
+```{r}
+# Same result, just ordered differently
+inner_join(purchases, products, by = "product_id")
+
+```
+
+
+## Full Joins
+
+The syntax for a full join is as follows:
+
+```{r, eval = FALSE}
+
+full_join(A, B, by = "key")
+
+```
+
+
+A full join will return all rows and all columns from both `A` and `B`. Where there are no matching key values, an `NA` is returned. 
+
+
+```{r}
+# Returning all observations in both tables
+full_join(products, purchases, by = "product_id")
+
+```
+
+
+Next, we will discuss **filtering joins**. Mutating joins allowed us to combine variables from two tables, but if matching key values were not found, then a missing (`NA`) value was generated. Filtering joins are desgined to remove data were there are no matching key values across tables. Also, filtering joins will not duplicate key values with multiple matches across tables.
+
+
+## Semi Joins
+
+The syntax for a semi join is as follows:
+
+```{r, eval = FALSE}
+
+semi_join(A, B, by = "key")
+
+```
+
+A semi join will return all rows from `A` where there are matching key values in `B`, keeping just the columns from `A`. 
+
+A semi join differs from an inner join. An inner join will return one row of `A` for each matching row of `B`. A semi join will never duplicate rows of `A`.
+
+Let's see some examples of semi joins.
+
+
+```{r}
+# All rows in products that also appeared in purchases (by product_id)
+semi_join(products, purchases, by = "product_id")
+
+```
+
+
+```{r}
+# All rows in purchases that also appear in products (by product_id)
+semi_join(purchases, products, by = "product_id")
+
+```
+
+
+## Anti Joins
+
+The syntax for an anti join is as follows:
+
+```{r, eval = FALSE}
+
+anti_join(A, B, by = "key")
+
+```
+
+
+An anti join will return all rows from `A` where there are no matching key values in `B`, keeping just the columns from `A`. 
+
+Let's see some examples of anti joins.
+
+
+```{r}
+# All rows in products that did not appear in purchases (by product_id)
+anti_join(products, purchases, by = "product_id")
+
+```
+
+
+```{r}
+# All rows in purchases that did not appear in products (by product_id)
+# We get an empty data frame in this case
+anti_join(purchases, products, by = "product_id")
+
+```
+
+
+## Keys With Different Column Names
+
+Often times when joining data frames together, the key variable that links multiple datasets together may have different names in the various data frames. See the example data frames below where a unique country identifier, the ISO3 code, appears as 'country_code' in a different table. To join the sample data frames below, we must specify the input to the `by` argument as follows: 
+
+
+`by = c("key value name in first table" = "key value name in second table")`
+
+
+```{r}
+# Country table 1
+countries_1 <- tibble(ISO3 = c("AFG", "IND", "CHN", "USA"),
+                      population_millions = c(37.21, 1368.73, 1420.06, 329.1))
+
+# Country table 2
+countries_2 <- tibble(country_code = c("AFG", "IND", "CHN", "USA"),
+                      country_name = c("Afghanistan", "India", "China", 
+                                       "United States"))
+
+```
+
+
+```{r}
+# View data
+countries_1
+
+```
+
+
+```{r}
+countries_2
+
+```
+
+
+The code below demonstrates how to join these data frames.
+
+
+```{r}
+left_join(countries_1, countries_2,
+          by = c("ISO3" = "country_code"))
+
+```
+
+
+## Composite Key Variables
+
+A composite key is a combination of variable values that uniquely identify a row within a data frame. In the sample data frames that are created below, the composite keys for `patients_1` and `patients_2` are `first_name, last_name, date_of_birth` and `first, last, date_of_birth`. To join these patient records, we extend our inputs to the `by` argument as demonstrated below.
+
+
+```{r}
+# patients_1
+patients_1 <- tibble(first_name = c("Mia", "Vivian", "Vivian", "Tyler"),
+                     last_name = c("Wallace", "Ward", "Ward", "Durden"),
+                     date_of_birth = c("05-12-1994", "06-02-1990", 
+                                       "08-04-1994", "05-28-1999"),
+                     gender = c("female", "female", "female", "male"))
+```
+
+
+```{r}
+# patients_2
+patients_2 <- tibble(first = c("Tyler", "Mia", "Vivian", "Vivian"),
+                     last = c("Durden", "Wallace", "Ward", "Ward"),
+                     date_of_birth = c("05-28-1999", "05-12-1994", 
+                                       "06-02-1990", "08-04-1994"),
+                     blood_pressure = c("140/85", "130/86", "110/72", "120/80"))
+
+```
+
+
+
+```{r}
+patients_1
+
+```
+
+
+```{r}
+patients_2
+
+```
+
+
+```{r}
+# Combining the data
+left_join(patients_1, patients_2,
+          by = c("first_name" = "first", 
+                 "last_name" = "last", 
+                 "date_of_birth" = "date_of_birth"))
+```
+
+
+# Stacking Data Frames
+
+## Stacking Rows
+
+To stack two or more data frames vertically by row, we can use the `bind_rows()` function from the `dplyr` package. This task is common when an analyst needs to combine data from multiple sources. For `bind_rows()` to work properly, all input data frames should contain the same variables (column names), but not necessarily in the same order.
+
+In the example below, we have two sample data sets that correspond to sales revenue from two different store locations. Our goal is to place the data into one file which can be used for data analysis in the future.
+
+
+```{r}
+# Sample data 1
+store_a <- tibble(day = c("Monday", "Tuesday", "Wednesday"),
+                  date = c("02-04-2019", "02-05-2019", "02-06-2019"),
+                  sales = c(120452, 574632, 329342))
+```
+
+
+```{r}
+# Sample data 2
+store_b <- tibble(day = c("Monday", "Tuesday", "Thursday"),
+                  date = c("02-04-2019", "02-05-2019", "02-07-2019"),
+                  sales = c(750452, 974332, 527342))
+```
+
+
+
+```{r}
+
+store_a
+
+```
+
+
+
+```{r}
+
+store_b
+
+```
+
+
+If we supply input to the optional `.id` argument of `bind_rows()`, it will create an ID variable in the combined data frame and name that variable with what we have provided. The ID variable is created as a sequence starting at 1 and ending at the total number of data frames that are being combined.
+
+
+
+```{r}
+
+combined_data <- bind_rows(store_a, store_b,
+                           .id = "store")
+```
+
+
+
+```{r}
+# View results
+combined_data
+
+```
+
+
+```{r}
+# Without creating an ID variable
+bind_rows(store_a, store_b)
+
+```
+
+
+## Stacking Columns
+
+To stack two or more data frames horizontally by columns, we can use the `bind_cols()` function from the `dplyr` package. 
+
+```{r}
+# Store A profit
+store_a_profit <-tibble(profit = c(80578, 420145, 247587))
+```
+
+
+```{r}
+# Add this column to store_a data frame
+store_a_combined <- bind_cols(store_a, store_a_profit)
+```
+
+
+```{r}
+store_a_combined
+```
+
+
+
+# Reshaping Data
+
+The `tidyr` package is useful for transforming data frames from long and wide formats based on key-value pairs. The functions we will be using from `tidyr` include `pivot_wider()` and `pivot_longer()`. 
+
+Intuitively, `pivot_wider()` is used to transform the values of a data frame variable into multiple columns (long to wide format). Conversely, `pivot_longer()` is used to collapse multiple columns into a single variable (wide to long format).
+
+The `tidyr` package contains 5 sample data frames, `table1`, `table2`, `table3`, `table4a`, and `table4b`, that have the same data on the prevalence of a disease in Afghanistan, Brazil, and China (just in different formats). They are loaded to your `R` session when you import the `tidyverse` package.
+
+
+## Long to Wide
+
+To demonstrate the `pivot_wider()` function, we will be working with the `table2` data frame. Let's first have a look at the data.
+
+```{r}
+
+table2
+
+```
+
+
+The `pivot_wider()` function takes many arguments as input, but the 4 most important ones are listed below.
+
+
+
+- `data` - a data frame to pivot  
+- `names_from` - the quoted column name in `data` whose distinct values will be spread into multiple columns  
+- `values_from` - the quoted column name in `data` with the corresponding values associated with the `names_from` column
+- `values_fill` - default is `NA`. If a name-value pair is missing, this is what the result is filled with 
+
+ 
+
+Let's see an example. The figure below is a visualization of the `pivot_wider()` function applied to the `table2` data frame. Here we pivot the unique values of the `type` variable into their own columns and fill them with the corresponding values from the `count` column.
+
+
+```{r}
+# Pivot unique values of "type" variable into multiple columns
+
+pivot_wider(table2, names_from = 'type', values_from = 'count')
+
+```
+
+
+### Fish Encounters Data
+
+Let's see another example of `pivot_wider()`. The `tidyr` package has a built-in data frame, `fish_encounters`, that describes when fish swimming down a river are detected by automatic monitoring stations.
+
+Each row contains a fish ID number in the `fish` column, the `station` at which the fish was detected, and a variable `seen` which is equal to 1 if the fish was detected.
+
+
+
+```{r}
+fish_encounters
+```
+
+
+Let's use `pivot_wider()` to move the values within the `station` variable into their own columns. In this case our `names_from` argument will be "station" and our `values_from` argument will be "seen". 
+
+
+
+```{r}
+fish_encounters %>% 
+  pivot_wider(names_from = 'station',
+              values_from = 'seen')
+```
+
+
+Notice in the output above that we have a number of missing values. 
+
+This is because that particular combination of (`fish`, `station`) did not appear in the `fish_encounters` data. 
+
+Since this means that the fish was not detected at that station, we simply replace our missing values (`NA`) with a 0.
+
+To do this, we add `values_fill = 0` to our `pivot_wider()` function.
+
+
+```{r}
+fish_encounters %>% 
+  pivot_wider(names_from = 'station',
+              values_from = 'seen',
+              values_fill = 0)
+```
+
+
+## Wide to Long
+
+When it is your goal to convert from wide to long format, use the `pivot_longer()` function. The `pivot_longer()` function takes a data frame and collapses multiple columns into a single column. 
+
+The `pivot_longer()` function takes many arguments as input, but the 4 most important ones are listed below.
+
+
+
+- `data` - a data frame to pivot
+- `cols` - a vector of columns names (either quoted or raw) to pivot into a single variable
+- `names_to` - a string specifying the name of the column to create from the columns in the `cols` argument   
+- `values_to` - a string specifying the name of the column to create from the associated values of the columns in the `cols` argument
+
+ 
+
+To demonstrate the `pivot_longer()` function we will be using `table1`. 
+
+This table contains the same data as `table2`, just in a different format.
+
+
+```{r}
+# View the data
+table1
+
+```
+
+
+Let's say that we need to collect the `cases` and `population` columns into a single column that we want to name `value_type` and the associated values into a column named `total_count`. The code below achieves this task.
+
+
+```{r}
+
+pivot_longer(table1, cols = c(cases, population), 
+             names_to = 'value_type', 
+             values_to = 'total_count')
+
+```
+
+
+### Reshaping Data Analysis Results
+
+Pivoting data from wide to long format is important for taking data presented in summary tables and reshaping it for the [optimal structure for data analysis and machine learning](https://www.gmudatamining.com/lesson-03-lecture.html){target="_blank"}.
+
+Remember that the optimal format of a data file for machine learning has observations as rows and attributes (variables) as columns.
+
+
+Let's use the `mpg` data to demonstrate this. The `mpg` data is loaded with the `tidyverse` package and contains information about cars, such as their fuel efficiency.
+
+
+```{r}
+mpg
+```
+
+
+Let's say we are interested in studying the average fuel efficiency of cars. 
+
+In optimal format, our data would have observations (rows) with average fuel efficiency and attributes (variables) such as car manufacturer, fuel efficiency type (city or highway), and other characteristics.
+
+The `dplyr` code below calculates the average fuel efficiency by manufacturer and type (either city or highway). 
+
+Notice how this table is **not** in optimal format. We have a variable (fuel efficiency type) spread across two columns. To put this into optimal format, we need to collect these two columns into one.
+
+
+```{r}
+mpg %>% group_by(manufacturer) %>% 
+  summarise(city = mean(cty), highway = mean(hwy))
+```
+
+
+Next let's pass the results from above into `pivot_longer()`. Now we have data that is ready for data analysis or machine learning applications.
+
+
+```{r}
+mpg %>% group_by(manufacturer) %>% 
+        summarise(city = mean(cty), 
+                  highway = mean(hwy)) %>% 
+        pivot_longer(cols = c(city, highway),
+                     names_to = 'fuel_efficiency_type',
+                     values_to = 'average_fuel_efficiency')
+```
+
+
+The `tidyr` package can be used to perform a wide range of complex data re-structuring tasks. We have only scratched the surface in this tutorial.
+
+This is an important skill to develop if you plan on working with data and I recommend that you go through all of the examples in the [tidyr documentation](https://tidyr.tidyverse.org/articles/pivot.html){target="_blank"}
+
+
+
