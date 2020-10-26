@@ -24,11 +24,11 @@ library(tidymodels)
 library(vip)
 
 # Load employee attrition data
-employee_data <- read_rds(url('https://gmubusinessanalytics.netlify.app/data/employee_data.rds'))
+employee_data <- read_rds('./data/employee_data.rds')
 
 
 # Heart disease data
-heart_df <- read_rds(url('https://gmubusinessanalytics.netlify.app/data/heart_disease.rds')) %>% 
+heart_df <- read_rds('./data/heart_disease.rds') %>% 
             select(heart_disease, age, chest_pain, max_heart_rate, resting_blood_pressure)
 
 # View heart disease data

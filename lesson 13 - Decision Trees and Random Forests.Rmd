@@ -25,7 +25,7 @@ library(vip)
 library(rpart.plot)
 
 # Telecommunications customer churn data
-churn_df <- read_rds(url('https://gmubusinessanalytics.netlify.app/data/churn_data.rds'))
+churn_df <- read_rds('./data/churn_data.rds')
 
 ```
 
